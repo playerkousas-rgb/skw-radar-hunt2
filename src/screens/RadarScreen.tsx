@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ArrowLeft, Navigation, Map as MapIcon, List, Volume2, 
+import {
+  ArrowLeft, Navigation, Map as MapIcon, List, Volume2,
   VolumeX, Target, RotateCcw, CheckCircle, AlertTriangle,
   MoreVertical, Trash2, Download, X
 } from 'lucide-react';
@@ -23,6 +23,26 @@ interface Props {
   gpsEnabled: boolean;
 }
 
+// 單次屏幕閃光元件（只閃一下，不會不停閃）
+function ScreenFlash() {
+  useEffect(() => {
+    const originalBg = document.documentElement.style.backgroundColor || '#0f172a';
+
+    // 強烈黃橙色閃光（可調整顏色）
+    document.documentElement.style.transition = 'none';
+    document.documentElement.style.backgroundColor = '#fbbf24';   // 亮橙黃
+
+    const timer = setTimeout(() => {
+      document.documentElement.style.transition = 'background-color 0.5s ease-out';
+      document.documentElement.style.backgroundColor = originalBg;
+    }, 220);   // 只閃 0.22 秒，感覺明顯但不煩人
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  return null;
+}
+
 export default function RadarScreen({ map, currentLocation, foundCheckpoints, onBack, onChangeView, gpsEnabled }: Props) {
   const [detailCP, setDetailCP] = useState<Checkpoint | null>(null);
   const [detailDist, setDetailDist] = useState<number>(0);
@@ -41,7 +61,7 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
   }, [foundCheckpoints]);
 
   const unfoundCPs = map.checkpoints.filter(cp => !localFound.includes(cp.id));
-  const nearest = unfoundCPs.length > 0 
+  const nearest = unfoundCPs.length > 0
     ? getNearestCheckpoint(unfoundCPs, currentLocation.lat, currentLocation.lng)
     : null;
 
@@ -53,15 +73,15 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
   // Check for nearby alerts
   useEffect(() => {
     if (!nearest) return;
-    
+
     if (nearest.distance <= nearest.checkpoint.radius * 3 && nearest.distance > nearest.checkpoint.radius) {
       const now = Date.now();
       if (now - lastNearbyAlert.current > 15000) {
         lastNearbyAlert.current = now;
-        setNearbyAlert({ 
-          show: true, 
-          distance: nearest.distance, 
-          name: nearest.checkpoint.label 
+        setNearbyAlert({
+          show: true,
+          distance: nearest.distance,
+          name: nearest.checkpoint.label
         });
         if (soundEnabled) playSound('nearby');
       }
@@ -107,7 +127,7 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
           </p>
         </div>
       )}
-      
+
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900/50 shrink-0">
         <button onClick={onBack} className="p-2 hover:bg-slate-800 rounded-lg">
@@ -141,7 +161,7 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
 
       {/* Progress bar */}
       <div className="h-1 bg-slate-800 shrink-0">
-        <motion.div 
+        <motion.div
           className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400"
           initial={{ width: 0 }}
           animate={{ width: `${progress * 100}%` }}
@@ -216,7 +236,7 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
               <h3 className="text-sm font-bold text-slate-300">🎯 最近寶藏</h3>
               <span className="text-xs text-slate-500">{unfoundCPs.length} 個剩餘</span>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-3">
               {/* Nearest Card */}
               <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-3">
@@ -229,7 +249,7 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
                     <p className="text-xs text-slate-500">
                       {CHECKPOINT_TYPES.find(t => t.type === nearest.checkpoint.type)?.label} • {nearest.checkpoint.radius}m 半徑
                     </p>
-                    
+
                     <div className="mt-2 flex items-baseline gap-1">
                       <span className="text-3xl font-black text-cyan-400 font-mono">
                         {formatDistance(nearest.distance)}
@@ -323,6 +343,11 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
         onDismiss={() => setNearbyAlert({ ...nearbyAlert, show: false })}
       />
 
+      {/* 靠近時只閃一次屏幕（不會不停閃） */}
+      {nearest && nearest.distance <= nearest.checkpoint.radius * 1.5 && !isComplete && (
+        <ScreenFlash key={Date.now()} />
+      )}
+
       {/* Detail modal */}
       <CPDetailModal
         visible={!!detailCP}
@@ -355,7 +380,6 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
                   <X size={22} className="text-slate-400" />
                 </button>
               </div>
-
               <div className="space-y-3">
                 <button
                   onClick={handleClearProgress}
@@ -369,7 +393,6 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
                     <p className="text-sm text-slate-500">重新開始尋寶（保留地圖）</p>
                   </div>
                 </button>
-
                 <button
                   onClick={handleImportNewMap}
                   className="w-full flex items-center gap-3 p-4 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-left"
@@ -382,7 +405,6 @@ export default function RadarScreen({ map, currentLocation, foundCheckpoints, on
                     <p className="text-sm text-slate-500">加載其他領袖的地圖</p>
                   </div>
                 </button>
-
                 <button
                   onClick={() => { setShowMenu(false); onChangeView('settings'); }}
                   className="w-full flex items-center gap-3 p-4 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-left"
