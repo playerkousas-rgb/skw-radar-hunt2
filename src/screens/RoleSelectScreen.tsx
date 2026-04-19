@@ -104,7 +104,7 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout }
                 </div>
               ) : (
                 <GlowButton
-                  title="成為領袖"
+                  title="埋下寶藏"
                   onClick={() => onSelectRole('leader')}
                   variant="primary"
                   size="lg"
@@ -179,16 +179,22 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout }
           </motion.div>
         </div>
 
-        {/* Features */}
+        {/* Footer Info & Copyright */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7 }}
-          className="mt-8 text-center"
+          className="mt-12 text-center"
         >
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-600 mb-8">
             ✨ 支援 4 種寶藏類型 • GPS 精確定位 • QR碼分享
           </p>
+          
+          <div className="pt-8 border-t border-slate-800/30">
+            <p className="text-[10px] text-slate-700 tracking-[0.3em] font-bold">
+              COPYRIGHT 2026 SKWSCOUT
+            </p>
+          </div>
         </motion.div>
       </div>
     </div>
