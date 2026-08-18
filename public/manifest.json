@@ -1,7 +1,7 @@
 {
   "name": "Radar Hunt - GPS Treasure Hunt",
   "short_name": "RadarHunt",
-  "description": "GPS treasure hunt app with real-time radar tracking",
+  "description": "GPS treasure hunt app with real-time radar tracking — © 2026 Scout System",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0A0E1A",

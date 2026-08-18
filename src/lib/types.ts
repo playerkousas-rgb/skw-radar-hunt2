@@ -9,6 +9,7 @@ export interface Checkpoint {
   radius: number;
   hint?: string;
   found?: boolean;
+  points?: number; // 奪分模式分數（預設 1 分）
   order: number;
   type: 'text' | 'image' | 'emoji' | 'link'; // 4種寶藏類型
   reward?: string; // 額外獎勵內容
@@ -28,6 +29,11 @@ export interface GameMap {
   password?: string;
   difficulty?: 'easy' | 'normal' | 'hard' | 'extreme';
   expectedDuration?: number; // minutes
+  gameMode?: GameModeType;      // 玩法：奪分式/越野式/自由尋寶（預設 free）
+  timingMode?: TimingModeType;  // 計時：計時/倒計時/不限時（預設 stopwatch）
+  timeLimitSec?: number;        // 倒計時模式的限時（秒）
+  showUserLocation?: boolean;   // 地圖上顯示自身位置（預設顯示；隱藏考驗方向感）
+  nearbyHints?: boolean;        // 接近寶藏時的提示（音效/通知/範圍內橫幅，預設開）
 }
 
 export type DifficultyLevel = 'easy' | 'normal' | 'hard' | 'extreme';
@@ -75,6 +81,8 @@ export interface TreasureHistory {
   totalCheckpoints: number;
   timeSpent: number;
   distanceWalked: number;
+  score?: number;      // 本次得分（奪分模式）
+  totalScore?: number; // 地圖總分
 }
 
 export interface UserStats {
@@ -97,7 +105,26 @@ export interface LeaderboardEntry {
   timeSpent: number;
   completedAt: number;
   distanceWalked: number;
+  score?: number;
+  totalScore?: number;
 }
+
+// ========== 遊戲玩法與計時模式 ==========
+export type GameModeType = 'score' | 'course' | 'free';
+
+export const GAME_MODE_LABELS: Record<GameModeType, { label: string; icon: string; desc: string }> = {
+  score: { label: '奪分式', icon: '🏆', desc: '自由次序搶分，每點可設分數（預設 1 分）' },
+  course: { label: '越野式', icon: '🧭', desc: '必須依指定次序完成檢查點' },
+  free: { label: '自由尋寶', icon: '🎯', desc: '無規則自由尋寶，只看計時' },
+};
+
+export type TimingModeType = 'stopwatch' | 'countdown' | 'none';
+
+export const TIMING_MODE_LABELS: Record<TimingModeType, { label: string; icon: string; desc: string }> = {
+  stopwatch: { label: '計時模式', icon: '⏱️', desc: '向上計時，越快完成越強' },
+  countdown: { label: '倒計時模式', icon: '⏳', desc: '限時完成，時間到自動結算成績' },
+  none: { label: '不限時', icon: '🚫', desc: '不顯示計時，輕鬆玩' },
+};
 
 export const ZOOM_PRESETS = [
   { label: '室內', value: 50, icon: '🏠' },
@@ -172,6 +199,10 @@ export interface PlayerResult {
   checkpointsFound: number;
   totalCheckpoints: number;
   distanceWalked: number;
+  score?: number;      // 本次得分
+  totalScore?: number; // 地圖總分
+  gameMode?: GameModeType;   // 玩法（成績顯示用）
+  timingMode?: TimingModeType; // 計時方式（none 時隱藏用時）
   verificationCode: string; // short code for leader to verify
 }
 

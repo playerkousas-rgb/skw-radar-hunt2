@@ -6,10 +6,11 @@ import {
   BookOpen, HelpCircle
 } from 'lucide-react';
 import { saveFoundCheckpoints, saveActiveMap } from '../lib/storage';
-import { GameMap, Checkpoint, ViewType, GameSession } from '../lib/types';
+import { GameMap, Checkpoint, ViewType, GameSession, GAME_MODE_LABELS } from '../lib/types';
 import {
   calculateDistance, formatDistance, getDirectionLabel,
-  getNearestCheckpoint, playSound, vibrateDevice, formatTime, getGPSQuality
+  getNearestCheckpoint, playSound, vibrateDevice, formatTime, getGPSQuality,
+  getCheckpointPoints, sumCheckpointPoints
 } from '../lib/utils';
 import RadarView from '../components/RadarView';
 import NearbyAlert from '../components/NearbyAlert';
@@ -27,12 +28,13 @@ interface Props {
   gpsEnabled: boolean;
   session?: GameSession | null;
   startTime?: number;
+  onClearProgress?: () => void;
   onFinishHunt?: () => void;
 }
 
 export default function RadarScreen({
   map, currentLocation, foundCheckpoints, onBack, onChangeView,
-  gpsEnabled, session, startTime: startTimeProp, onFinishHunt
+  gpsEnabled, session, startTime: startTimeProp, onClearProgress, onFinishHunt
 }: Props) {
   const [detailCP, setDetailCP] = useState<Checkpoint | null>(null);
   const [detailDist, setDetailDist] = useState<number>(0);
@@ -45,11 +47,24 @@ export default function RadarScreen({
   const [localFound, setLocalFound] = useState<string[]>(foundCheckpoints);
   const [foundPopup, setFoundPopup] = useState<Checkpoint | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [remainingTime, setRemainingTime] = useState<number | null>(null);
+  const timeUpFired = useRef(false);
+
+  // 玩法與計時模式
+  const gameMode = map.gameMode || 'free';
+  const timingMode = map.timingMode || 'stopwatch';
+  const isCourse = gameMode === 'course';
+  const timeLimitSec = map.timeLimitSec || 0;
+  const showUserLocation = map.showUserLocation !== false;
+  const nearbyHints = map.nearbyHints !== false;
   const lastNearbyAlert = useRef<number>(0);
   const lastFoundRef = useRef<Set<string>>(new Set(foundCheckpoints));
 
-  // Determine start time (from session or prop)
-  const huntStart = startTimeProp || (session?.startTime && session.startTime < Date.now() + 60000 ? session.startTime : Date.now());
+  // Determine start time (from session or prop) — frozen on mount so the
+  // elapsed timer doesn't reset on every re-render
+  const [huntStart] = useState(() =>
+    startTimeProp || (session?.startTime && session.startTime < Date.now() + 60000 ? session.startTime : Date.now())
+  );
 
   // Sync with props & detect new found checkpoints
   useEffect(() => {
@@ -68,15 +83,43 @@ export default function RadarScreen({
     setLocalFound(foundCheckpoints);
   }, [foundCheckpoints, map.checkpoints]);
 
-  // Live timer
+  // Live timer (stopwatch)
   useEffect(() => {
+    if (timingMode === 'none') return;
     const update = () => setElapsedTime(Math.floor((Date.now() - huntStart) / 1000));
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [huntStart]);
+  }, [huntStart, timingMode]);
 
-  const unfoundCPs = map.checkpoints.filter(cp => !localFound.includes(cp.id));
+  // 倒計時模式：剩餘時間 + 時間到自動結算
+  useEffect(() => {
+    if (timingMode !== 'countdown' || !timeLimitSec) return;
+    const update = () => {
+      const remaining = timeLimitSec - Math.floor((Date.now() - huntStart) / 1000);
+      setRemainingTime(Math.max(0, remaining));
+    };
+    update();
+    const interval = setInterval(update, 500);
+    return () => clearInterval(interval);
+  }, [huntStart, timingMode, timeLimitSec]);
+
+  const isComplete = localFound.length === map.checkpoints.length;
+  useEffect(() => {
+    if (remainingTime === 0 && !timeUpFired.current && !isComplete && map.checkpoints.length > 0) {
+      timeUpFired.current = true;
+      // 時間到 — 自動結算成績（不用 confirm，也允許 0 進度）
+      if (onFinishHunt) onFinishHunt();
+    }
+  }, [remainingTime, isComplete, onFinishHunt, map.checkpoints.length]);
+
+  const allUnfound = map.checkpoints.filter(cp => !localFound.includes(cp.id));
+  // 越野式：只有「下一個」檢查點是進行中，其餘依序解鎖
+  const unfoundCPs = isCourse ? allUnfound.slice(0, 1) : allUnfound;
+  const lockedCPs = isCourse ? allUnfound.slice(1) : [];
+  const nextCourseNumber = isCourse
+    ? map.checkpoints.findIndex(cp => cp.id === allUnfound[0]?.id) + 1
+    : 0;
   const nearest = unfoundCPs.length > 0
     ? getNearestCheckpoint(unfoundCPs, currentLocation.lat, currentLocation.lng)
     : null;
@@ -85,9 +128,9 @@ export default function RadarScreen({
     ? Math.max(50, Math.min(50000, nearest.distance * 2.5))
     : 500;
 
-  // Nearby alert
+  // Nearby alert (可由領袖關閉提示)
   useEffect(() => {
-    if (!nearest) return;
+    if (!nearest || !nearbyHints) return;
     if (nearest.distance <= nearest.checkpoint.radius * 3 && nearest.distance > nearest.checkpoint.radius) {
       const now = Date.now();
       if (now - lastNearbyAlert.current > 8000) {
@@ -100,14 +143,25 @@ export default function RadarScreen({
         if (soundEnabled) playSound('nearby');
       }
     }
-  }, [currentLocation, nearest, soundEnabled]);
+  }, [currentLocation, nearest, soundEnabled, nearbyHints]);
 
   const progress = localFound.length / Math.max(map.checkpoints.length, 1);
-  const isComplete = localFound.length === map.checkpoints.length;
+  // Capture-points score
+  const hasCustomPoints = map.checkpoints.some(cp => getCheckpointPoints(cp) > 1);
+  const earnedScore = sumCheckpointPoints(map.checkpoints, localFound);
+  const totalScore = sumCheckpointPoints(map.checkpoints);
   const gpsQuality = getGPSQuality(currentLocation.accuracy);
   const directionToNearest = nearest
     ? calculateBearing(currentLocation.lat, currentLocation.lng, nearest.checkpoint.latitude, nearest.checkpoint.longitude)
     : 0;
+
+  // 位置隱藏時，地圖以寶藏中心定位（避免地圖視角洩露自身位置）
+  const checkpointsCenter = map.checkpoints.length > 0
+    ? {
+        lat: map.checkpoints.reduce((sum, c) => sum + c.latitude, 0) / map.checkpoints.length,
+        lng: map.checkpoints.reduce((sum, c) => sum + c.longitude, 0) / map.checkpoints.length,
+      }
+    : currentLocation;
 
   const openCPDetail = (cp: Checkpoint) => {
     const dist = calculateDistance(currentLocation.lat, currentLocation.lng, cp.latitude, cp.longitude);
@@ -117,7 +171,13 @@ export default function RadarScreen({
 
   const handleClearProgress = async () => {
     if (!confirm('確定要清除所有尋寶進度嗎？這將重置你已找到的所有寶藏。')) return;
-    await saveFoundCheckpoints(map.id, []);
+    if (onClearProgress) {
+      // Let App clear storage + state together, otherwise the props sync
+      // effect would immediately restore the old progress
+      await onClearProgress();
+    } else {
+      await saveFoundCheckpoints(map.id, []);
+    }
     setLocalFound([]);
     lastFoundRef.current = new Set();
     setShowMenu(false);
@@ -168,10 +228,31 @@ export default function RadarScreen({
                 <Target size={10} className="text-cyan-400" />
                 <span className="text-cyan-400 font-bold">{localFound.length}/{map.checkpoints.length}</span>
               </span>
+              {hasCustomPoints && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-0.5 font-mono text-amber-400 font-bold">
+                    ⭐{earnedScore}/{totalScore}
+                  </span>
+                </>
+              )}
               <span>•</span>
-              <span className="flex items-center gap-0.5 font-mono text-emerald-400">
-                <Clock size={10} /> {formatTime(elapsedTime)}
-              </span>
+              {timingMode === 'stopwatch' && (
+                <span className="flex items-center gap-0.5 font-mono text-emerald-400">
+                  <Clock size={10} /> {formatTime(elapsedTime)}
+                </span>
+              )}
+              {timingMode === 'countdown' && remainingTime !== null && (
+                <span className={`flex items-center gap-0.5 font-mono font-bold ${remainingTime <= 60 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>
+                  ⏳ {formatTime(remainingTime)}
+                </span>
+              )}
+              {gameMode !== 'free' && (
+                <>
+                  <span>•</span>
+                  <span className="text-slate-400">{GAME_MODE_LABELS[gameMode].icon}</span>
+                </>
+              )}
               {session && <>
                 <span>•</span>
                 <span className="text-violet-400 font-mono">{session.code}</span>
@@ -233,7 +314,9 @@ export default function RadarScreen({
         className="absolute top-16 left-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur border border-violet-500/40 text-violet-300 text-xs hover:bg-violet-500/20 active:scale-95 transition-all"
       >
         <BookOpen size={14} />
-        <span className="font-medium">{localFound.length} 收藏</span>
+        <span className="font-medium">
+          {localFound.length} 收藏{hasCustomPoints ? ` • ⭐${earnedScore}分` : ''}
+        </span>
       </button>
 
       {/* Main Content - Map or Radar */}
@@ -241,12 +324,13 @@ export default function RadarScreen({
         {showMap ? (
           <LiveMapView
             checkpoints={map.checkpoints}
-            userLat={currentLocation.lat}
-            userLng={currentLocation.lng}
+            userLat={showUserLocation ? currentLocation.lat : checkpointsCenter.lat}
+            userLng={showUserLocation ? currentLocation.lng : checkpointsCenter.lng}
             zoomRange={radarRange}
             foundIds={localFound}
+            courseMode={isCourse}
+            showUser={showUserLocation}
             onCPPress={openCPDetail}
-            showUser={true}
             interactive={true}
             height="100%"
             darkMode={true}
@@ -264,7 +348,7 @@ export default function RadarScreen({
                 />
                 {/* In range banner */}
                 <AnimatePresence>
-                  {nearest.distance <= nearest.checkpoint.radius && (
+                  {nearbyHints && nearest.distance <= nearest.checkpoint.radius && (
                     <motion.div
                       initial={{ scale: 0, y: -20 }}
                       animate={{ scale: 1, y: 0 }}
@@ -306,8 +390,10 @@ export default function RadarScreen({
         {!isComplete && nearest ? (
           <>
             <div className="p-3 border-b border-slate-800 bg-slate-800/50 flex items-center justify-between shrink-0">
-              <h3 className="text-sm font-bold text-slate-300">🎯 最近寶藏</h3>
-              <span className="text-xs text-slate-500">剩餘 {unfoundCPs.length} 個</span>
+              <h3 className="text-sm font-bold text-slate-300">
+                {isCourse ? `🧭 下一個檢查點 (${nextCourseNumber}/${map.checkpoints.length})` : '🎯 最近寶藏'}
+              </h3>
+              <span className="text-xs text-slate-500">剩餘 {allUnfound.length} 個</span>
             </div>
 
             <div className="flex-1 overflow-y-auto p-3">
@@ -321,6 +407,9 @@ export default function RadarScreen({
                     <h4 className="font-bold text-slate-100 text-lg truncate">{nearest.checkpoint.label}</h4>
                     <p className="text-xs text-slate-500">
                       {CHECKPOINT_TYPES.find(t => t.type === nearest.checkpoint.type)?.label} • {nearest.checkpoint.radius}m 半徑
+                      {getCheckpointPoints(nearest.checkpoint) > 1 && (
+                        <span className="text-amber-400 font-bold"> • ⭐ {getCheckpointPoints(nearest.checkpoint)}分</span>
+                      )}
                     </p>
                     <div className="mt-2 flex items-baseline gap-2">
                       <span className="text-3xl font-black text-cyan-400 font-mono">
@@ -348,7 +437,27 @@ export default function RadarScreen({
               </div>
 
               {/* Other unfound treasures */}
-              {unfoundCPs.length > 1 && (
+              {isCourse && lockedCPs.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">🔒 依序解鎖（越野式次序）:</p>
+                  <div className="space-y-2">
+                    {lockedCPs.slice(0, 4).map((cp) => (
+                      <div key={cp.id} className="flex items-center gap-3 p-2.5 bg-slate-800/30 rounded-lg border border-slate-700/50">
+                        <span className="text-lg opacity-40 grayscale">{cp.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-500 truncate">{cp.label}</p>
+                        </div>
+                        <span className="text-[10px] text-slate-600 font-mono shrink-0">#{map.checkpoints.findIndex(c => c.id === cp.id) + 1}</span>
+                      </div>
+                    ))}
+                    {lockedCPs.length > 4 && (
+                      <p className="text-xs text-slate-600 text-center py-1">...還有 {lockedCPs.length - 4} 個</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!isCourse && unfoundCPs.length > 1 && (
                 <div>
                   <p className="text-xs text-slate-500 mb-2">其他待尋寶藏:</p>
                   <div className="space-y-2">
@@ -359,6 +468,9 @@ export default function RadarScreen({
                           <span className="text-xl">{cp.emoji}</span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-slate-300 truncate">{cp.label}</p>
+                            {getCheckpointPoints(cp) > 1 && (
+                              <p className="text-[10px] text-amber-400 font-bold">⭐ {getCheckpointPoints(cp)}分</p>
+                            )}
                           </div>
                           <span className="text-sm text-cyan-400 font-mono shrink-0">{formatDistance(dist)}</span>
                         </div>
@@ -415,7 +527,20 @@ export default function RadarScreen({
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
             <Target size={48} className="mb-2 opacity-30" />
-            <p>沒有待尋寶藏</p>
+            {map.checkpoints.length === 0 ? (
+              <>
+                <p>這張地圖還沒有任何寶藏</p>
+                <p className="text-xs mt-1 text-slate-600 mb-4">請向領袖重新取得地圖</p>
+                <button
+                  onClick={() => onChangeView('member-import')}
+                  className="px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-900 rounded-xl font-bold text-sm"
+                >
+                  📥 重新導入地圖
+                </button>
+              </>
+            ) : (
+              <p>沒有待尋寶藏</p>
+            )}
           </div>
         )}
       </div>

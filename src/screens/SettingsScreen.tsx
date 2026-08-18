@@ -4,6 +4,7 @@ import { ArrowLeft, Volume2, Vibrate, Map, Wifi, Palette, Globe, User, Save } fr
 import { ViewType, UserSettings } from '../lib/types';
 import { loadSettings, saveSettings } from '../lib/storage';
 import GlowButton from '../components/GlowButton';
+import CopyrightFooter from '../components/CopyrightFooter';
 
 interface Props {
   onBack: () => void;
@@ -241,8 +242,9 @@ export default function SettingsScreen({ onBack, onSaveSettings, currentSettings
             <span className="text-sm">Radar Hunt v2.0</span>
           </div>
           <p className="text-xs text-slate-600 mt-1">
-            GPS 尋寶雷達 © 2026 SKWSCOUT
+            GPS 尋寶雷達
           </p>
+          <CopyrightFooter className="mt-2" />
         </motion.div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Trophy, Medal, Clock, Navigation, Share2, Filter } from 'lucide-react';
 import { LeaderboardEntry } from '../lib/types';
-import { loadLeaderboard, loadActiveMap } from '../lib/storage';
+import { loadLeaderboard, loadActiveMap, loadSettings } from '../lib/storage';
 import { formatTime, formatDistance, getRankBadge } from '../lib/utils';
 
 interface Props {
@@ -23,17 +23,21 @@ export default function LeaderboardScreen({ onBack }: Props) {
     setLoading(true);
     const activeMap = await loadActiveMap();
     setCurrentMapId(activeMap?.id || null);
-    
+
     const allEntries = await loadLeaderboard(filter === 'current' ? activeMap?.id : undefined);
     setEntries(allEntries.slice(0, 50)); // Top 50
     setLoading(false);
   };
 
   const handleShare = async () => {
+    // Find this player's best rank using their saved player name
+    const settings = await loadSettings();
+    const myIndex = entries.findIndex(e => e.playerName === settings.playerName);
+    const rankText = myIndex >= 0 ? `第 ${myIndex + 1} 名` : '尚未上榜';
     if (navigator.share) {
       await navigator.share({
         title: 'Radar Hunt 排行榜',
-        text: `我在 Radar Hunt 的排名是 ${entries.findIndex(e => e.playerName === '我') + 1 || 'N/A'}！來挑戰我吧！`,
+        text: `我在 Radar Hunt 尋寶排行榜是 ${rankText}！來挑戰我吧！`,
       });
     }
   };
@@ -55,7 +59,7 @@ export default function LeaderboardScreen({ onBack }: Props) {
         </button>
         <div className="text-center">
           <h1 className="font-bold text-slate-100">🏆 排行榜</h1>
-          <p className="text-xs text-slate-500">全球玩家排名</p>
+          <p className="text-xs text-slate-500">本機成績記錄（含領袖登錄的成績）</p>
         </div>
         <button onClick={handleShare} className="p-2 hover:bg-slate-800 rounded-lg">
           <Share2 size={22} className="text-cyan-400" />
@@ -188,8 +192,17 @@ export default function LeaderboardScreen({ onBack }: Props) {
                   
                   {/* Score */}
                   <div className="text-right">
-                    <p className="font-bold text-cyan-400">{Math.round(completionRate)}%</p>
-                    <p className="text-xs text-slate-500">{entry.checkpointsFound}/{entry.totalCheckpoints}</p>
+                    {(entry.score ?? 0) > 0 && (entry.totalScore ?? 0) > 0 ? (
+                      <>
+                        <p className="font-bold text-amber-400">⭐ {entry.score}<span className="text-xs text-slate-500">/{entry.totalScore}</span></p>
+                        <p className="text-xs text-slate-500">{entry.checkpointsFound}/{entry.totalCheckpoints} • {Math.round(completionRate)}%</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-bold text-cyan-400">{Math.round(completionRate)}%</p>
+                        <p className="text-xs text-slate-500">{entry.checkpointsFound}/{entry.totalCheckpoints}</p>
+                      </>
+                    )}
                   </div>
                 </motion.div>
               );

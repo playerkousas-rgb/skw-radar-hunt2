@@ -5,7 +5,7 @@ import {
   Share2, Home, RotateCcw, Star, Zap
 } from 'lucide-react';
 import { PlayerResult, GameSession } from '../lib/types';
-import { formatTime, formatDistance, copyToClipboard, playSound } from '../lib/utils';
+import { formatTime, formatDistance, copyToClipboard, playSound, encodeResult } from '../lib/utils';
 import GlowButton from '../components/GlowButton';
 
 interface Props {
@@ -17,8 +17,12 @@ interface Props {
 
 export default function ResultScreen({ result, session, onBackToHome, onPlayAgain }: Props) {
   const [copied, setCopied] = useState(false);
+  const [copiedFull, setCopiedFull] = useState(false);
   const completionRate = (result.checkpointsFound / result.totalCheckpoints) * 100;
   const isPerfect = result.checkpointsFound === result.totalCheckpoints;
+  // Full result code — carries name/time/score so the leader can register the
+  // result even from another device (no server needed)
+  const fullResultCode = encodeResult(result);
 
   const handleCopy = async () => {
     await copyToClipboard(result.verificationCode);
@@ -27,11 +31,24 @@ export default function ResultScreen({ result, session, onBackToHome, onPlayAgai
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyFull = async () => {
+    await copyToClipboard(fullResultCode);
+    setCopiedFull(true);
+    playSound('success');
+    setTimeout(() => setCopiedFull(false), 2000);
+  };
+
+  const score = result.score ?? result.checkpointsFound;
+  const totalScore = result.totalScore ?? result.totalCheckpoints;
+  const timingMode = result.timingMode || 'stopwatch';
+  const showTime = timingMode !== 'none';
+
   const handleShare = async () => {
     const text = `🎯 Radar Hunt - ${result.mapName}
 👤 ${result.playerName}
-🏆 完成度: ${result.checkpointsFound}/${result.totalCheckpoints} (${Math.round(completionRate)}%)
-⏱️ 用時: ${formatTime(result.timeSpent)}
+⭐ 得分: ${score}/${totalScore}
+🏆 完成度: ${result.checkpointsFound}/${result.totalCheckpoints} (${Math.round(completionRate)}%)${showTime ? `
+⏱️ 用時: ${formatTime(result.timeSpent)}` : ''}
 🚶 距離: ${formatDistance(result.distanceWalked)}
 🔑 驗證碼: ${result.verificationCode}`;
 
@@ -97,24 +114,50 @@ export default function ResultScreen({ result, session, onBackToHome, onPlayAgai
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="w-full max-w-sm grid grid-cols-3 gap-3 mb-6"
+          className={`w-full max-w-sm grid gap-3 mb-6 ${showTime ? 'grid-cols-3' : 'grid-cols-2'}`}
         >
           <div className="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700">
             <Trophy size={24} className="mx-auto mb-2 text-amber-400" />
             <p className="text-2xl font-black text-slate-100">{result.checkpointsFound}</p>
             <p className="text-xs text-slate-500">/{result.totalCheckpoints} 寶藏</p>
           </div>
-          <div className="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700">
-            <Clock size={24} className="mx-auto mb-2 text-cyan-400" />
-            <p className="text-2xl font-black text-slate-100">{formatTime(result.timeSpent)}</p>
-            <p className="text-xs text-slate-500">用時</p>
-          </div>
+          {showTime && (
+            <div className="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700">
+              <Clock size={24} className="mx-auto mb-2 text-cyan-400" />
+              <p className="text-2xl font-black text-slate-100">{formatTime(result.timeSpent)}</p>
+              <p className="text-xs text-slate-500">用時</p>
+            </div>
+          )}
           <div className="bg-slate-800/60 rounded-xl p-4 text-center border border-slate-700">
             <Navigation size={24} className="mx-auto mb-2 text-emerald-400" />
             <p className="text-2xl font-black text-slate-100">{formatDistance(result.distanceWalked)}</p>
             <p className="text-xs text-slate-500">步行距離</p>
           </div>
         </motion.div>
+
+        {/* Score banner (capture-points mode) */}
+        {(result.totalScore ?? 0) > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.55 }}
+            className="w-full max-w-sm bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-xl p-4 border border-amber-500/40 mb-4 flex items-center justify-between"
+          >
+            <div>
+              <p className="text-xs text-amber-200/70 mb-0.5">⭐ 本次得分</p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl font-black text-amber-400 font-mono">{score}</span>
+                <span className="text-lg text-slate-500">/ {totalScore} 分</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-black text-amber-400">
+                {Math.round((score / Math.max(totalScore, 1)) * 100)}%
+              </p>
+              <p className="text-[10px] text-slate-500">得分率</p>
+            </div>
+          </motion.div>
+        )}
 
         {/* Completion bar */}
         <motion.div
@@ -181,6 +224,37 @@ export default function ResultScreen({ result, session, onBackToHome, onPlayAgai
                 : '截圖此頁面或分享給朋友看看你的成績！'}
             </p>
           </motion.div>
+
+        {/* Full result code (for cross-device verification) */}
+        {session && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.75 }}
+            className="w-full max-w-sm bg-slate-800/60 rounded-xl p-4 border border-slate-700 mb-6"
+          >
+            <h3 className="text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+              📋 完整成績代碼
+            </h3>
+            <p className="text-[11px] text-slate-500 mb-2">
+              若領袖的「驗證碼」比對不到你的成績（不同裝置），改給他這組代碼即可自動登錄
+            </p>
+            <div className="flex gap-2">
+              <textarea
+                value={fullResultCode}
+                readOnly
+                rows={2}
+                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-[10px] text-slate-400 font-mono break-all resize-none"
+              />
+              <button
+                onClick={handleCopyFull}
+                className="px-3 bg-slate-700 hover:bg-slate-600 rounded-lg shrink-0"
+              >
+                {copiedFull ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} className="text-slate-400" />}
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Actions */}
         <motion.div
