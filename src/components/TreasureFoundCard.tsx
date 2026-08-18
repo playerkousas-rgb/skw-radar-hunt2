@@ -5,10 +5,11 @@ import { Checkpoint } from '../lib/types';
 interface Props {
   isOpen: boolean;
   checkpoint: Checkpoint | null;
+  progress?: { current: number; total: number };
   onClose: () => void;
 }
 
-export default function TreasureFoundCard({ isOpen, checkpoint, onClose }: Props) {
+export default function TreasureFoundCard({ isOpen, checkpoint, progress, onClose }: Props) {
   if (!checkpoint) return null;
 
   const getTypeIcon = () => {
@@ -110,8 +111,14 @@ export default function TreasureFoundCard({ isOpen, checkpoint, onClose }: Props
                   <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
                     {getTypeIcon()}
                     <span>{getTypeLabel()}</span>
-                    <span className="mx-1">•</span>
-                    <span>第 {checkpoint.order + 1} 個寶藏</span>
+                    {progress && (
+                      <>
+                        <span className="mx-1">•</span>
+                        <span className="text-emerald-400 font-bold">
+                          {progress.current}/{progress.total} 已找到
+                        </span>
+                      </>
+                    )}
                   </div>
                 </motion.div>
               </div>

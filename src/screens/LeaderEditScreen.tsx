@@ -146,7 +146,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
       emoji: '📍',
       label: `寶藏 ${currentMap.checkpoints.length + 1}`,
       content: '',
-      radius: 3,
+      radius: parseInt(cpRadius) || 3,
       order: currentMap.checkpoints.length,
       type: 'text',
     };
@@ -160,6 +160,22 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
     setCpLat('');
     setCpLng('');
     playSound('click');
+  };
+
+  const dropAtMyLocation = () => {
+    if (!navigator.geolocation) {
+      alert('你的瀏覽器不支援定位');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCpLat(pos.coords.latitude.toFixed(6));
+        setCpLng(pos.coords.longitude.toFixed(6));
+        playSound('click');
+      },
+      () => alert('無法取得 GPS 位置，請檢查權限'),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const deleteCheckpoint = async (id: string) => {
@@ -222,12 +238,21 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
           pendingRadius={parseInt(cpRadius) || 3}
         />
 
+        {/* GPS drop button - always visible */}
+        <button
+          onClick={dropAtMyLocation}
+          className="absolute top-4 right-4 z-10 p-3 bg-emerald-500 hover:bg-emerald-400 text-slate-900 rounded-full shadow-lg shadow-emerald-500/40 active:scale-95 transition-all"
+          title="使用我現在的位置"
+        >
+          <Navigation size={20} />
+        </button>
+
         {/* Quick action overlay */}
         {cpLat && cpLng && (
-          <div className="absolute top-4 left-4 right-4 flex gap-2">
+          <div className="absolute top-16 left-4 right-16 flex gap-2">
             <button
               onClick={quickDrop}
-              className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-900 py-2 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2"
+              className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-900 py-2 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg"
             >
               <Navigation size={16} />
               快速放置
@@ -237,7 +262,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
               className="flex-1 bg-slate-800/90 border border-cyan-500/50 text-cyan-400 hover:bg-slate-700 py-2 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2"
             >
               <Plus size={16} />
-              詳細設定
+              詳細
             </button>
           </div>
         )}
