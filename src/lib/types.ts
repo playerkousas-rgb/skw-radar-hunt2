@@ -26,12 +26,25 @@ export interface GameMap {
   zoomRange?: number;
   isPublic?: boolean;
   password?: string;
+  difficulty?: 'easy' | 'normal' | 'hard' | 'extreme';
+  expectedDuration?: number; // minutes
 }
+
+export type DifficultyLevel = 'easy' | 'normal' | 'hard' | 'extreme';
+
+export const DIFFICULTY_LABELS: Record<DifficultyLevel, { label: string; color: string; emoji: string; desc: string }> = {
+  easy: { label: '簡單', color: 'text-emerald-400', emoji: '🌱', desc: '半徑大、寶藏點少' },
+  normal: { label: '普通', color: 'text-cyan-400', emoji: '🚶', desc: '適合初次玩家' },
+  hard: { label: '困難', color: 'text-amber-400', emoji: '🔥', desc: '半徑小、點數多' },
+  extreme: { label: '極限', color: 'text-red-400', emoji: '💀', desc: '挑戰體力與觀察力' },
+};
 
 export type RoleType = 'leader' | 'member' | null;
 export type TabType = 'radar' | 'live' | 'list';
-export type ViewType = 'role-select' | 'leader-home' | 'leader-edit' | 'leader-export' | 
-                       'member-import' | 'member-radar' | 'member-map' | 'member-list' | 
+export type ViewType = 'role-select' | 'leader-home' | 'leader-edit' | 'leader-export' | 'leader-session' |
+                       'member-import' | 'member-join' | 'member-waiting' | 'member-radar' | 'member-map' | 'member-list' |
+                       'treasure-log' | 'help' |
+                       'result' | 'leaderboard' |
                        'achievements' | 'history' | 'settings';
 
 export type CheckpointType = 'text' | 'image' | 'emoji' | 'link';
@@ -123,4 +136,48 @@ export interface UserSettings {
   highContrast: boolean;
   language: 'zh' | 'en';
   playerName: string;
+  compassCalibrated: boolean;
+  gpsHighAccuracy: boolean;
+}
+
+// Multiplayer session types
+export interface GameSession {
+  code: string;           // 6-char room code
+  mapId: string;
+  mapName: string;
+  creatorName: string;
+  createdAt: number;
+  startTime: number | null; // synchronized start timestamp
+  players: SessionPlayer[];
+  status: 'waiting' | 'starting' | 'running' | 'finished';
+}
+
+export interface SessionPlayer {
+  id: string;
+  name: string;
+  joinedAt: number;
+  ready: boolean;
+  finishedAt: number | null;
+  result?: PlayerResult;
+}
+
+export interface PlayerResult {
+  playerId: string;
+  playerName: string;
+  mapId: string;
+  mapName: string;
+  startTime: number;
+  finishTime: number;
+  timeSpent: number;
+  checkpointsFound: number;
+  totalCheckpoints: number;
+  distanceWalked: number;
+  verificationCode: string; // short code for leader to verify
+}
+
+// Start signal encoded in URL
+export interface StartSignal {
+  code: string;
+  startTime: number;
+  mapChecksum: string;
 }

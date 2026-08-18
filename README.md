@@ -1,73 +1,137 @@
-# React + TypeScript + Vite
+# 🎯 Radar Hunt v2.0 - GPS 真人尋寶雷達
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一個手機優先的 Progressive Web App (PWA)，讓領袖可以建立尋寶地圖、開房間，邀請多位玩家同步出發，使用 GPS 雷達找寶藏，最後繳交驗證碼統計成績。
 
-Currently, two official plugins are available:
+## ✨ 功能特色
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 📱 手機友善 (Mobile First)
+- 原生 PWA 支援，可加到主畫面
+- 全螢幕體驗，支援 iPhone 瀏海 (Safe Area Insets)
+- 防止 iOS 點擊縮放、彈跳刷新
+- 大尺寸按鈕與觸控目標（≥ 44px）
+- 深色模式 UI，適合戶外活動
+- 音效 + 震動反饋
 
-## React Compiler
+### 🛰️ GPS 準確度提升
+- **卡爾曼濾波器 (Kalman Filter)**：平滑 GPS 軌跡，減少飄移
+- **異常值過濾**：自動排除不合理的 GPS 跳點（超過合理跑步速度的位移）
+- **精度品質指示器**：即時顯示 GPS 訊號等級（極佳/良好/一般/弱）
+- **觸發半徑自適應**：依 GPS 精度動態調整觸發範圍，避免假陽性
+- **移動距離過濾**：距離增量需超過 GPS 誤差 30% 才計入總距離，避免抖動
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 👥 多人同步遊玩（無需後端）
+- **6 位房間代碼**：領袖建立房間後產生易讀的房間代碼（避開易混淆字元）
+- **QR Code 加入**：分享 QR Code，成員掃描即自動匯入地圖與房間代碼
+- **同步倒數開始**：
+  - 領袖點「開始」後設定倒數秒數（3/5/10/15/30/60 秒）
+  - 產生「開始連結」與 QR Code，分享給成員
+  - 成員點擊連結後自動同步倒數
+  - 也可在等待頁面手動輸入開始代碼
+- **等待大廳**：加入房間後會進入等待畫面，顯示 GPS 狀態與就緒指示
 
-## Expanding the ESLint configuration
+### 🏁 完成與成績系統
+- **完成畫面**：找到全部寶藏後顯示華麗的完成動畫與統計數據
+- **驗證碼機制**：每位玩家完成後得到一個 `ROOM-XXXX` 格式驗證碼
+- **領袖成績輸入**：領袖在房間頁面輸入驗證碼即可登錄成績
+- **即時排行榜**：前三名有頒獎台動畫，顯示用時與找到寶藏數
+- **成績分享**：一鍵分享成績到 LINE / WhatsApp / 郵件 / 系統分享
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 🗺️ 地圖編輯器
+- 互動式 Leaflet 地圖（深色模式）
+- 點擊地圖放置寶藏點
+- 支援地名搜尋（Nominatim API）
+- 4 種寶藏類型：文字、圖片、表情符號、連結
+- 可設定提示 (hint) 與觸發半徑（1m–50m）
+- 快速放置按鈕
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 🏆 成就系統
+- 🎯 初次探索、🏆 尋寶獵人、👑 大師獵人
+- ⚡ 速通達人（5 分鐘內完成）、🏃 跑者（10km）
+- 💎 完美尋寶（100% 完成）
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🚀 使用方式
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 領袖
+1. 選擇「我是領袖」
+2. 輸入你的名字
+3. 創建地圖 → 在編輯器中點擊地圖放置寶藏
+4. 設定每個寶藏的名稱、表情、半徑、提示
+5. 回到領袖中心，點「🚀 開房間！開始多人遊戲」
+6. 分享房間代碼或 QR Code 給玩家
+7. 玩家都加入後，設定倒數秒數，點「開始」
+8. 分享開始連結/QR Code（讓玩家點擊同步倒數）
+9. 玩家完成後會拿到驗證碼，你輸入即可記錄成績
+
+### 玩家
+1. 選擇「我是玩家」，輸入你的名字
+2. 掃描領袖的 QR Code 或點擊分享連結
+3. 自動進入加入流程，確認房間代碼與地圖
+4. 等待領袖開始（會自動倒數）
+5. 倒數結束後開始用雷達找寶藏
+6. 靠近寶藏時會有音效、震動與屏幕閃光提示
+7. 全部找到後會顯示驗證碼，交給領袖登記
+
+## 🛠️ 開發
+
+```bash
+npm install
+npm run dev        # 啟動開發伺服器
+npm run build      # 建置生產版本
+npm run preview    # 預覽生產版本
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 📂 架構
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+├── App.tsx                 # 主應用，管理狀態、GPS、會話、路由
+├── components/
+│   ├── RadarView.tsx       # 雷達掃描 UI（同心圓、掃描線、目標點）
+│   ├── LiveMapView.tsx     # Leaflet 地圖 iframe 組件
+│   ├── GlowButton.tsx      # 發光按鈕
+│   ├── GPSPermissionModal.tsx
+│   ├── GPSStatus.tsx
+│   ├── NearbyAlert.tsx
+│   ├── CPDetailModal.tsx
+│   ├── CheckpointCard.tsx
+│   ├── ProgressCard.tsx
+│   ├── TreasureFoundCard.tsx
+│   └── CountdownOverlay.tsx
+├── screens/
+│   ├── RoleSelectScreen.tsx
+│   ├── LeaderHomeScreen.tsx
+│   ├── LeaderEditScreen.tsx
+│   ├── LeaderExportScreen.tsx
+│   ├── LeaderSessionScreen.tsx    # 👑 多人房間管理
+│   ├── MemberImportScreen.tsx
+│   ├── MemberJoinScreen.tsx       # 🎮 加入房間
+│   ├── MemberWaitingScreen.tsx    # ⏳ 等待開始
+│   ├── RadarScreen.tsx            # 🎯 主要尋寶畫面
+│   ├── ResultScreen.tsx           # 🏁 成績頁面
+│   ├── LeaderboardScreen.tsx
+│   ├── AchievementsScreen.tsx
+│   ├── HistoryScreen.tsx
+│   ├── ListScreen.tsx
+│   ├── MapScreen.tsx
+│   ├── DashboardScreen.tsx
+│   └── SettingsScreen.tsx
+└── lib/
+    ├── types.ts           # TypeScript 型別
+    ├── storage.ts         # localStorage 封裝
+    ├── utils.ts           # GPS 濾波器、距離計算、編/解碼、音效震動
+    └── colors.ts
+```
+
+## 🔧 技術
+
+- **React 19** + **TypeScript**
+- **Vite**（快速建置）
+- **Tailwind CSS v4**
+- **Framer Motion**（流暢動畫）
+- **Leaflet**（互動地圖）
+- **Lucide React**（圖示）
+- PWA 支援（manifest、主題色、加到主畫面）
+
+## 📜 授權
+
+© 2026 SKWSCOUT. All rights reserved.

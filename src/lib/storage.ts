@@ -1,6 +1,6 @@
 import { 
   GameMap, RoleType, TreasureHistory, UserStats, UserAchievement, 
-  ACHIEVEMENTS, LeaderboardEntry, UserSettings 
+  ACHIEVEMENTS, LeaderboardEntry, UserSettings, GameSession, SessionPlayer, PlayerResult
 } from './types';
 
 const MAPS_KEY = 'treasure_maps';
@@ -12,6 +12,9 @@ const STATS_KEY = 'user_stats';
 const ACHIEVEMENTS_KEY = 'user_achievements';
 const SETTINGS_KEY = 'user_settings';
 const LEADERBOARD_KEY = 'leaderboard';
+const SESSION_KEY = 'active_session';
+const RESULTS_KEY = 'session_results';
+const SAVED_SESSIONS_KEY = 'saved_sessions';
 
 // Maps
 export async function saveMaps(maps: GameMap[]): Promise<void> {
@@ -58,8 +61,24 @@ export async function loadRole(): Promise<RoleType> {
 }
 
 // Found Checkpoints
+interface FoundLogEntry { id: string; time: number; }
+
 export async function saveFoundCheckpoints(mapId: string, ids: string[]): Promise<void> {
   localStorage.setItem(`${FOUND_KEY}_${mapId}`, JSON.stringify(ids));
+}
+
+export async function recordFoundCheckpoint(mapId: string, id: string): Promise<string[]> {
+  const existing = await loadFoundCheckpoints(mapId);
+  if (existing.includes(id)) return existing;
+  const updated = [...existing, id];
+  localStorage.setItem(`${FOUND_KEY}_${mapId}`, JSON.stringify(updated));
+  // Also save log with timestamps
+  const logKey = `found_log_${mapId}`;
+  const existingLogRaw = localStorage.getItem(logKey);
+  const log: FoundLogEntry[] = existingLogRaw ? JSON.parse(existingLogRaw) : [];
+  log.push({ id, time: Date.now() });
+  localStorage.setItem(logKey, JSON.stringify(log));
+  return updated;
 }
 
 export async function loadFoundCheckpoints(mapId: string): Promise<string[]> {
@@ -67,8 +86,14 @@ export async function loadFoundCheckpoints(mapId: string): Promise<string[]> {
   return raw ? JSON.parse(raw) : [];
 }
 
+export async function loadFoundLog(mapId: string): Promise<FoundLogEntry[]> {
+  const raw = localStorage.getItem(`found_log_${mapId}`);
+  return raw ? JSON.parse(raw) : [];
+}
+
 export async function clearFoundCheckpoints(mapId: string): Promise<void> {
   localStorage.removeItem(`${FOUND_KEY}_${mapId}`);
+  localStorage.removeItem(`found_log_${mapId}`);
 }
 
 // History
@@ -153,6 +178,8 @@ const DEFAULT_SETTINGS: UserSettings = {
   highContrast: false,
   language: 'zh',
   playerName: '尋寶者',
+  compassCalibrated: false,
+  gpsHighAccuracy: true,
 };
 
 export async function loadSettings(): Promise<UserSettings> {
@@ -192,4 +219,54 @@ export async function getPlayerRank(playerId: string, mapId?: string): Promise<n
   const entries = await loadLeaderboard(mapId);
   const index = entries.findIndex(e => e.id === playerId);
   return index === -1 ? -1 : index + 1;
+}
+
+// ========== Session / Multiplayer ==========
+
+export async function saveActiveSession(session: GameSession | null): Promise<void> {
+  if (session) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } else {
+    localStorage.removeItem(SESSION_KEY);
+  }
+}
+
+export async function loadActiveSession(): Promise<GameSession | null> {
+  const raw = localStorage.getItem(SESSION_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export async function addPlayerResult(result: PlayerResult): Promise<void> {
+  const existing = await loadAllResults();
+  const updated = [result, ...existing];
+  localStorage.setItem(RESULTS_KEY, JSON.stringify(updated));
+}
+
+export async function loadAllResults(): Promise<PlayerResult[]> {
+  const raw = localStorage.getItem(RESULTS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function loadResultsForSession(sessionCode: string): Promise<PlayerResult[]> {
+  const all = await loadAllResults();
+  // Verification codes start with session code prefix
+  return all.filter(r => r.verificationCode.startsWith(sessionCode));
+}
+
+// Save multiple sessions for leader to track
+export async function saveSessionToHistory(session: GameSession): Promise<void> {
+  const existing = await loadSavedSessions();
+  const updated = [session, ...existing.filter(s => s.code !== session.code)].slice(0, 50);
+  localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(updated));
+}
+
+export async function loadSavedSessions(): Promise<GameSession[]> {
+  const raw = localStorage.getItem(SAVED_SESSIONS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function deleteSavedSession(code: string): Promise<void> {
+  const existing = await loadSavedSessions();
+  const updated = existing.filter(s => s.code !== code);
+  localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(updated));
 }

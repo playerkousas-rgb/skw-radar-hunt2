@@ -1,7 +1,33 @@
-import { Checkpoint, GameMap, LeaderboardEntry, UserSettings } from './types';
+import { Checkpoint, GameMap, LeaderboardEntry, UserSettings, PlayerResult } from './types';
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+}
+
+// Generate a short readable room code (6 chars, no confusing chars)
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export function generateRoomCode(length = 6): string {
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+// Generate a short verification code for result reporting
+export function generateVerificationCode(sessionCode: string): string {
+  const tail = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `${sessionCode}-${tail}`;
+}
+
+// Simple checksum for map data (used for start signal)
+export function mapChecksum(map: GameMap): string {
+  const str = map.id + map.checkpoints.map(c => `${c.latitude.toFixed(5)}${c.longitude.toFixed(5)}`).join('');
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36).slice(0, 6);
 }
 
 export function calculateDistance(
@@ -265,4 +291,125 @@ export function getRankBadge(rank: number): { color: string; label: string } {
   if (rank === 3) return { color: 'bg-amber-600 text-amber-100', label: '🥉 季軍' };
   if (rank <= 10) return { color: 'bg-cyan-500/20 text-cyan-400', label: '🏆 Top 10' };
   return { color: 'bg-slate-700 text-slate-400', label: `#${rank}` };
+}
+
+// ========== GPS Accuracy Improvements ==========
+
+// Kalman-like simple 1D filter for smoothing GPS positions
+export interface GPSFilter {
+  lat: number;
+  lng: number;
+  accuracy: number;
+  timestamp: number;
+  variance: number;
+}
+
+export function createGPSFilter(): GPSFilter {
+  return { lat: 0, lng: 0, accuracy: 999, timestamp: 0, variance: 1000 };
+}
+
+export function filterGPS(
+  filter: GPSFilter,
+  lat: number,
+  lng: number,
+  accuracy: number,
+  timestamp: number,
+  maxSpeedMps = 10 // running speed ~10 m/s, anything faster likely GPS error
+): { lat: number; lng: number; accuracy: number; filtered: boolean } {
+  if (filter.timestamp === 0 || accuracy > 100) {
+    // First fix or very bad accuracy: accept directly
+    filter.lat = lat;
+    filter.lng = lng;
+    filter.accuracy = accuracy;
+    filter.timestamp = timestamp;
+    filter.variance = accuracy * accuracy;
+    return { lat, lng, accuracy, filtered: false };
+  }
+
+  const dt = (timestamp - filter.timestamp) / 1000;
+  if (dt <= 0) return { lat: filter.lat, lng: filter.lng, accuracy: filter.accuracy, filtered: true };
+
+  // Predict: assume stationary with growing uncertainty
+  const predictionVariance = filter.variance + (dt * maxSpeedMps) * (dt * maxSpeedMps);
+  
+  // Distance from predicted
+  const dist = calculateDistance(filter.lat, filter.lng, lat, lng);
+  const maxExpectedDist = maxSpeedMps * dt + accuracy;
+  
+  // Outlier detection: reject if moved impossibly fast and accuracy is bad
+  if (dist > maxExpectedDist * 2 && accuracy > filter.accuracy * 1.5) {
+    // Likely GPS jump - ignore
+    return { lat: filter.lat, lng: filter.lng, accuracy: filter.accuracy, filtered: true };
+  }
+
+  // Kalman gain: trust new measurement based on its accuracy
+  const measurementVariance = accuracy * accuracy;
+  const K = predictionVariance / (predictionVariance + measurementVariance);
+  
+  filter.lat = filter.lat + K * (lat - filter.lat);
+  filter.lng = filter.lng + K * (lng - filter.lng);
+  filter.accuracy = Math.sqrt((1 - K) * predictionVariance);
+  filter.variance = (1 - K) * predictionVariance;
+  filter.timestamp = timestamp;
+
+  return { lat: filter.lat, lng: filter.lng, accuracy: filter.accuracy, filtered: K < 0.5 };
+}
+
+// Calculate GPS accuracy quality level
+export function getGPSQuality(accuracy: number | undefined): { level: 'excellent' | 'good' | 'fair' | 'poor'; color: string; label: string; icon: string } {
+  if (!accuracy || accuracy > 50) return { level: 'poor', color: 'text-red-400', label: '訊號弱', icon: '📶' };
+  if (accuracy > 20) return { level: 'fair', color: 'text-amber-400', label: '一般', icon: '📶' };
+  if (accuracy > 10) return { level: 'good', color: 'text-emerald-400', label: '良好', icon: '📶' };
+  return { level: 'excellent', color: 'text-cyan-400', label: '極佳', icon: '📡' };
+}
+
+// Compass / heading helpers (device orientation)
+export function getBearingFromDeviceOrientation(alpha: number | null, webkitCompassHeading?: number | null): number | null {
+  // iOS uses webkitCompassHeading (true heading)
+  if (webkitCompassHeading != null && !isNaN(webkitCompassHeading)) {
+    return webkitCompassHeading;
+  }
+  // Android: alpha is rotation around Z axis but relative to when orientation was first obtained
+  if (alpha != null && !isNaN(alpha)) {
+    // Rough approximation (alpha=0 means north on some devices, east on others)
+    return (360 - alpha) % 360;
+  }
+  return null;
+}
+
+// Compress result into shareable code
+export function encodeResult(result: PlayerResult): string {
+  const compact = {
+    c: result.verificationCode,
+    n: result.playerName,
+    m: result.mapName,
+    t: result.timeSpent,
+    f: result.checkpointsFound,
+    tot: result.totalCheckpoints,
+    d: Math.round(result.distanceWalked),
+    s: result.startTime,
+  };
+  return btoa(unescape(encodeURIComponent(JSON.stringify(compact))));
+}
+
+export function decodeResult(encoded: string): PlayerResult | null {
+  try {
+    const json = decodeURIComponent(escape(atob(encoded)));
+    const p = JSON.parse(json);
+    return {
+      playerId: p.c,
+      playerName: p.n,
+      mapId: '',
+      mapName: p.m,
+      startTime: p.s,
+      finishTime: p.s + p.t * 1000,
+      timeSpent: p.t,
+      checkpointsFound: p.f,
+      totalCheckpoints: p.tot,
+      distanceWalked: p.d,
+      verificationCode: p.c,
+    };
+  } catch {
+    return null;
+  }
 }
