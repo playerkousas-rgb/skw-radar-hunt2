@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, Plus, MapPin, Trash2, Navigation, 
   Type, Image as ImageIcon, Smile, Link, Target,
-  X, Search
+  X, Search, ChevronUp, ChevronDown
 } from 'lucide-react';
-import { GameMap, Checkpoint, CHECKPOINT_TYPES, CheckpointType, EMOJI_LIST } from '../lib/types';
+import { GameMap, Checkpoint, CHECKPOINT_TYPES, CheckpointType, EMOJI_LIST, GAME_MODE_LABELS } from '../lib/types';
 import { saveMaps, loadMaps } from '../lib/storage';
 import { generateId, playSound } from '../lib/utils';
 import LiveMapView from '../components/LiveMapView';
@@ -29,6 +29,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
   const [cpLabel, setCpLabel] = useState('');
   const [cpContent, setCpContent] = useState('');
   const [cpRadius, setCpRadius] = useState('3');
+  const [cpPoints, setCpPoints] = useState('1');
   const [cpHint, setCpHint] = useState('');
   const [cpImageUrl, setCpImageUrl] = useState('');
   const [cpLink, setCpLink] = useState('');
@@ -67,6 +68,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
     setCpLabel('');
     setCpContent('');
     setCpRadius('3');
+    setCpPoints('1');
     setCpHint('');
     setCpImageUrl('');
     setCpLink('');
@@ -111,6 +113,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
       imageUrl: imageUrl || undefined,
       radius,
       hint: cpHint || undefined,
+      points: parseInt(cpPoints) > 0 ? parseInt(cpPoints) : 1,
       type: cpType,
       order: currentMap.checkpoints.length,
     };
@@ -147,6 +150,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
       label: `寶藏 ${currentMap.checkpoints.length + 1}`,
       content: '',
       radius: parseInt(cpRadius) || 3,
+      points: parseInt(cpPoints) > 0 ? parseInt(cpPoints) : 1,
       order: currentMap.checkpoints.length,
       type: 'text',
     };
@@ -178,12 +182,25 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
     );
   };
 
+  // 越野式：調整檢查點次序（上/下移）
+  const moveCheckpoint = async (idx: number, dir: -1 | 1) => {
+    const arr = [...currentMap.checkpoints];
+    const j = idx + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[idx], arr[j]] = [arr[j], arr[idx]];
+    const renumbered = arr.map((cp, i) => ({ ...cp, order: i }));
+    await saveMap({ ...currentMap, checkpoints: renumbered });
+    playSound('click');
+  };
+
   const deleteCheckpoint = async (id: string) => {
     if (!confirm('刪除這個寶藏點？')) return;
     const updated = currentMap.checkpoints.filter((cp) => cp.id !== id);
     await saveMap({ ...currentMap, checkpoints: updated });
     playSound('click');
   };
+
+  const isCourseMode = (currentMap.gameMode || 'free') === 'course';
 
   // Calculate center
   const centerLat = currentMap.checkpoints.length > 0
@@ -214,7 +231,15 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
         </button>
         <div className="text-center">
           <h1 className="font-bold text-slate-100 truncate max-w-[150px]">{currentMap.name}</h1>
-          <p className="text-xs text-slate-500">{currentMap.checkpoints.length} 個寶藏點</p>
+          <p className="text-xs text-slate-500">
+            {currentMap.gameMode && currentMap.gameMode !== 'free' && (
+              <span className="text-cyan-400 font-semibold">
+                {GAME_MODE_LABELS[currentMap.gameMode].icon} {GAME_MODE_LABELS[currentMap.gameMode].label}
+              </span>
+            )}
+            {currentMap.gameMode && currentMap.gameMode !== 'free' && ' • '}
+            {currentMap.checkpoints.length} 個寶藏點
+          </p>
         </div>
         <div className="w-10" />
       </div>
@@ -297,7 +322,11 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
             <div className="text-center py-8 text-slate-500">
               <Target size={48} className="mx-auto mb-3 opacity-30" />
               <p className="text-sm">點擊上方地圖放置寶藏</p>
-              <p className="text-xs mt-1 text-slate-600">可使用搜尋功能尋找地點</p>
+              <p className="text-xs mt-1 text-slate-600">
+                {isCourseMode
+                  ? '🧭 越野式：放置後用 ▲▼ 排好次序，成員須依序完成'
+                  : '可使用搜尋功能尋找地點'}
+              </p>
             </div>
           ) : (
             currentMap.checkpoints.map((cp, idx) => (
@@ -312,7 +341,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-cyan-400 font-mono">#{idx + 1}</span>
+                    <span className={`text-xs font-mono ${isCourseMode ? 'bg-cyan-500/20 text-cyan-300 rounded px-1.5 py-0.5 font-bold' : 'text-cyan-400'}`}>#{idx + 1}</span>
                     <span className="font-semibold text-slate-200 truncate">{cp.label}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -320,17 +349,45 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
                     <span>{CHECKPOINT_TYPES.find(t => t.type === cp.type)?.label}</span>
                     <span className="text-slate-600">•</span>
                     <span>{cp.radius}m 半徑</span>
+                    {cp.points && cp.points > 1 && (
+                      <>
+                        <span className="text-slate-600">•</span>
+                        <span className="text-amber-400 font-bold">⭐ {cp.points}分</span>
+                      </>
+                    )}
                   </div>
                   <p className="text-xs text-slate-600 font-mono mt-0.5">
                     {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
                   </p>
                 </div>
-                <button
-                  onClick={() => deleteCheckpoint(cp.id)}
-                  className="p-2 hover:bg-red-500/20 rounded-lg transition-colors shrink-0"
-                >
-                  <Trash2 size={18} className="text-red-400" />
-                </button>
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  {isCourseMode && (
+                    <>
+                      <button
+                        onClick={() => moveCheckpoint(idx, -1)}
+                        disabled={idx === 0}
+                        className="p-1.5 hover:bg-cyan-500/20 rounded-lg transition-colors disabled:opacity-20"
+                        title="上移"
+                      >
+                        <ChevronUp size={16} className="text-cyan-400" />
+                      </button>
+                      <button
+                        onClick={() => moveCheckpoint(idx, 1)}
+                        disabled={idx === currentMap.checkpoints.length - 1}
+                        className="p-1.5 hover:bg-cyan-500/20 rounded-lg transition-colors disabled:opacity-20"
+                        title="下移"
+                      >
+                        <ChevronDown size={16} className="text-cyan-400" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => deleteCheckpoint(cp.id)}
+                    className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={18} className="text-red-400" />
+                  </button>
+                </div>
               </motion.div>
             ))
           )}
@@ -491,6 +548,29 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
                         }`}
                       >
                         {r}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Points (capture-points mode) */}
+                <div>
+                  <label className="text-xs text-slate-500 mb-2 block">
+                    寶藏分數: <span className="text-amber-400 font-bold">⭐ {cpPoints} 分</span>
+                    <span className="text-slate-600">（奪分模式{currentMap.gameMode === 'score' ? '' : ' — 此圖非奪分式，分數僅供參考'}，預設 1 分）</span>
+                  </label>
+                  <div className="flex gap-2">
+                    {['1', '2', '3', '5', '10', '20'].map((pt) => (
+                      <button
+                        key={pt}
+                        onClick={() => setCpPoints(pt)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                          cpPoints === pt
+                            ? 'bg-amber-500 text-slate-900'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        {pt}
                       </button>
                     ))}
                   </div>

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, BookOpen, Lock } from 'lucide-react';
 import { GameMap, Checkpoint } from '../lib/types';
 import { loadFoundLog } from '../lib/storage';
-import { formatTime } from '../lib/utils';
+import { formatTime, getCheckpointPoints, sumCheckpointPoints } from '../lib/utils';
 
 interface FoundEntry {
   cp: Checkpoint;
@@ -76,13 +76,21 @@ export default function TreasureLogScreen({ map, startTime, onBack }: Props) {
             {/* Completion summary */}
             <div className="bg-gradient-to-br from-violet-500/20 to-cyan-500/20 rounded-2xl p-5 border border-violet-500/30">
               <p className="text-xs text-slate-400 mb-1">完成度</p>
-              <div className="flex items-baseline gap-2 mb-3">
+              <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-4xl font-black text-violet-300">{found.length}</span>
                 <span className="text-xl text-slate-500">/ {map.checkpoints.length}</span>
                 <span className="ml-auto text-lg font-bold text-cyan-400">
                   {Math.round(found.length / map.checkpoints.length * 100)}%
                 </span>
               </div>
+              {found.length > 0 && (
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs text-amber-200/70">⭐ 已得分</p>
+                  <p className="text-sm font-bold text-amber-400 font-mono">
+                    {sumCheckpointPoints(map.checkpoints, found.map(f => f.cp.id))} / {sumCheckpointPoints(map.checkpoints)} 分
+                  </p>
+                </div>
+              )}
               <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
@@ -115,6 +123,11 @@ export default function TreasureLogScreen({ map, startTime, onBack }: Props) {
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-lg">{entry.cp.emoji}</span>
                           <span className="text-sm font-semibold text-slate-200">{entry.cp.label}</span>
+                          {getCheckpointPoints(entry.cp) > 1 && (
+                            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-full px-1.5 py-0.5 shrink-0">
+                              ⭐{getCheckpointPoints(entry.cp)}
+                            </span>
+                          )}
                           <span className="text-xs text-slate-600 font-mono ml-auto">
                             {formatTime(Math.floor((entry.foundAt - startTime) / 1000))}
                           </span>

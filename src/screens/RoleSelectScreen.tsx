@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Crown, Search, LogOut, MapPin, Users, Compass, Gamepad2, User, HelpCircle } from 'lucide-react';
 import GlowButton from '../components/GlowButton';
+import CopyrightFooter from '../components/CopyrightFooter';
 import { RoleType } from '../lib/types';
-import { saveSettings } from '../lib/storage';
+import { loadSettings, saveSettings } from '../lib/storage';
 
 interface Props {
   onSelectRole: (role: Exclude<RoleType, null>) => void;
@@ -18,13 +19,12 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, 
   const [editingName, setEditingName] = useState(!playerName || playerName === '尋寶者');
 
   const handleSaveName = async () => {
-    if (name.trim()) {
-      await saveSettings({
-        soundEnabled: true, vibrationEnabled: true,
-        backgroundTracking: false, offlineMaps: false, highContrast: false,
-        language: 'zh', playerName: name.trim(),
-        compassCalibrated: false, gpsHighAccuracy: true,
-      });
+    const trimmed = name.trim();
+    if (trimmed) {
+      // Merge with existing settings so saving a name here doesn't reset
+      // sound / vibration / language preferences back to defaults.
+      const existing = await loadSettings();
+      await saveSettings({ ...existing, playerName: trimmed });
     }
   };
 
@@ -207,9 +207,7 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, 
             ✨ 多人房間 • GPS 濾波 • 同步倒數 • 成績驗證
           </p>
           <div className="pt-4 border-t border-slate-800/30">
-            <p className="text-[10px] text-slate-700 tracking-[0.3em] font-bold">
-              COPYRIGHT 2026 SKWSCOUT
-            </p>
+            <CopyrightFooter />
           </div>
         </motion.div>
       </div>

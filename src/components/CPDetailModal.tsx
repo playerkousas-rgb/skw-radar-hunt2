@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Radio, Navigation, FileText, Lightbulb, Image as ImageIcon } from 'lucide-react';
 import { Colors } from '../lib/colors';
 import { Checkpoint } from '../lib/types';
-import { formatDistance } from '../lib/utils';
+import { formatDistance, getCheckpointPoints } from '../lib/utils';
 
 interface Props {
   visible: boolean;
@@ -64,6 +64,12 @@ export default function CPDetailModal({ visible, checkpoint, distance, isFound =
                 <Radio size={14} className="text-cyan-400" />
                 <span className="text-xs font-semibold text-cyan-400">{checkpoint.radius}m 半徑</span>
               </div>
+              {getCheckpointPoints(checkpoint) > 1 && (
+                <div className="flex items-center gap-1.5 bg-amber-500/15 px-3 py-1.5 rounded-lg">
+                  <span className="text-xs">⭐</span>
+                  <span className="text-xs font-bold text-amber-400">{getCheckpointPoints(checkpoint)} 分</span>
+                </div>
+              )}
               {distance !== undefined && (
                 <div className="flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-lg">
                   <Navigation size={14} className="text-amber-400" />

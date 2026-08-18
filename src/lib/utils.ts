@@ -14,15 +14,35 @@ export function generateRoomCode(length = 6): string {
   return code;
 }
 
-// Generate a short verification code for result reporting
+// Generate a short verification code for result reporting.
+// Tail uses the same safe alphabet as room codes (~1M combinations,
+// avoids O/0/I/1 confusion when read aloud)
 export function generateVerificationCode(sessionCode: string): string {
-  const tail = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  let tail = '';
+  for (let i = 0; i < 4; i++) {
+    tail += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  }
   return `${sessionCode}-${tail}`;
 }
 
-// Simple checksum for map data (used for start signal)
+// Capture-points helpers: every checkpoint is worth at least 1 point
+export function getCheckpointPoints(cp: Checkpoint): number {
+  return cp.points && cp.points > 0 ? Math.floor(cp.points) : 1;
+}
+
+export function sumCheckpointPoints(checkpoints: Checkpoint[], foundIds?: string[]): number {
+  if (!foundIds) return checkpoints.reduce((sum, cp) => sum + getCheckpointPoints(cp), 0);
+  const found = new Set(foundIds);
+  return checkpoints.reduce((sum, cp) => (found.has(cp.id) ? sum + getCheckpointPoints(cp) : sum), 0);
+}
+
+// Simple checksum for map data (used for start signal).
+// IMPORTANT: must NOT include map.id — members regenerate the id on import,
+// so the checksum has to be stable across devices for synchronized start to work.
 export function mapChecksum(map: GameMap): string {
-  const str = map.id + map.checkpoints.map(c => `${c.latitude.toFixed(5)}${c.longitude.toFixed(5)}`).join('');
+  const str = map.checkpoints.length + '|' + map.checkpoints
+    .map(c => `${c.latitude.toFixed(5)}${c.longitude.toFixed(5)}`)
+    .join('');
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
@@ -117,6 +137,11 @@ export function encodeMapForExport(map: GameMap): string {
     d: map.description,
     c: map.creatorName,
     z: map.zoomRange || 5000,
+    g: map.gameMode || 'free',
+    tm: map.timingMode || 'stopwatch',
+    tl: map.timeLimitSec || 0,
+    sl: map.showUserLocation === false ? 0 : 1,
+    nh: map.nearbyHints === false ? 0 : 1,
     p: map.checkpoints.map((cp) => ({
       i: cp.id,
       a: Math.round(cp.latitude * 100000) / 100000,
@@ -129,6 +154,7 @@ export function encodeMapForExport(map: GameMap): string {
       h: cp.hint || '',
       t: cp.type || 'text',
       w: cp.reward || '',
+      s: cp.points && cp.points > 0 ? Math.floor(cp.points) : 1,
     })),
   };
   return btoa(unescape(encodeURIComponent(JSON.stringify(compact))));
@@ -136,15 +162,26 @@ export function encodeMapForExport(map: GameMap): string {
 
 export function decodeMapFromExport(data: string): GameMap | null {
   try {
+    let payload = (data || '').trim();
+
+    // Support pasting a full share URL — extract the ?import= parameter
+    if (/^https?:\/\//i.test(payload) || payload.includes('import=')) {
+      try {
+        const parsedUrl = new URL(payload);
+        const importParam = parsedUrl.searchParams.get('import');
+        if (importParam) payload = importParam;
+      } catch { /* not a valid URL — keep original payload */ }
+    }
+
     // Try base64 decode first
     let jsonStr: string;
     try {
-      jsonStr = decodeURIComponent(escape(atob(data)));
+      jsonStr = decodeURIComponent(escape(atob(payload)));
     } catch {
       // Try plain JSON
-      jsonStr = data;
+      jsonStr = payload;
     }
-    
+
     const parsed = JSON.parse(jsonStr);
 
     if (parsed.t === 'rh') {
@@ -154,6 +191,11 @@ export function decodeMapFromExport(data: string): GameMap | null {
         description: parsed.d || '',
         creatorName: parsed.c || 'Unknown',
         zoomRange: parsed.z || 5000,
+        gameMode: parsed.g || 'free',
+        timingMode: parsed.tm || 'stopwatch',
+        timeLimitSec: parsed.tl || undefined,
+        showUserLocation: parsed.sl !== 0,
+        nearbyHints: parsed.nh !== 0,
         createdAt: Date.now(),
         centerLat: parsed.p?.[0]?.a || 0,
         centerLng: parsed.p?.[0]?.o || 0,
@@ -169,6 +211,7 @@ export function decodeMapFromExport(data: string): GameMap | null {
           hint: p.h || '',
           type: p.t || 'text',
           reward: p.w || '',
+          points: p.s && p.s > 0 ? p.s : 1,
           order: idx,
         })),
       };
@@ -388,6 +431,10 @@ export function encodeResult(result: PlayerResult): string {
     tot: result.totalCheckpoints,
     d: Math.round(result.distanceWalked),
     s: result.startTime,
+    sc: result.score ?? result.checkpointsFound,
+    tsc: result.totalScore ?? result.totalCheckpoints,
+    gm: result.gameMode || 'free',
+    tm: result.timingMode || 'stopwatch',
   };
   return btoa(unescape(encodeURIComponent(JSON.stringify(compact))));
 }
@@ -407,6 +454,10 @@ export function decodeResult(encoded: string): PlayerResult | null {
       checkpointsFound: p.f,
       totalCheckpoints: p.tot,
       distanceWalked: p.d,
+      score: p.sc ?? p.f,
+      totalScore: p.tsc ?? p.tot,
+      gameMode: p.gm || 'free',
+      timingMode: p.tm || 'stopwatch',
       verificationCode: p.c,
     };
   } catch {

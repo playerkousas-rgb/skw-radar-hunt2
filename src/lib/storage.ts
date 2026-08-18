@@ -196,10 +196,10 @@ export async function addLeaderboardEntry(entry: LeaderboardEntry): Promise<void
   const existing = await loadLeaderboard();
   const updated = [...existing, entry]
     .sort((a, b) => {
-      // Sort by completion rate, then by time
-      const rateA = a.checkpointsFound / a.totalCheckpoints;
-      const rateB = b.checkpointsFound / b.totalCheckpoints;
-      if (rateB !== rateA) return rateB - rateA;
+      // Sort by score (capture-points; falls back to found-count), then by time
+      const scoreA = a.score ?? a.checkpointsFound;
+      const scoreB = b.score ?? b.checkpointsFound;
+      if (scoreB !== scoreA) return scoreB - scoreA;
       return a.timeSpent - b.timeSpent;
     })
     .slice(0, 100); // Keep top 100

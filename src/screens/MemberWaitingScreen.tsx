@@ -15,7 +15,8 @@ interface Props {
   currentLocation: { lat: number; lng: number; accuracy?: number };
   gpsAccuracy?: number;
   onBack: () => void;
-  onStartNow: () => void;
+  /** Starts the hunt. Pass a synchronized start timestamp (epoch ms) when available. */
+  onStartNow: (startTime?: number) => void;
 }
 
 export default function MemberWaitingScreen({
@@ -52,9 +53,9 @@ export default function MemberWaitingScreen({
     if (timeUntilStart === 0) {
       playSound('success');
       vibrateDevice([200, 100, 200]);
-      setTimeout(() => onStartNow(), 500);
+      setTimeout(() => onStartNow(session.startTime ?? undefined), 500);
     }
-  }, [timeUntilStart, onStartNow]);
+  }, [timeUntilStart, onStartNow, session.startTime]);
 
   // Listen for URL changes (if leader shares a start link, user clicks it)
   useEffect(() => {
@@ -65,12 +66,11 @@ export default function MemberWaitingScreen({
         try {
           const signal = JSON.parse(decodeURIComponent(atob(start)));
           if (signal.mapChecksum === mapChecksum(map) && signal.code === session.code) {
-            if (signal.startTime > Date.now()) {
-              // Trigger countdown
-              window.history.replaceState({}, '', window.location.pathname);
-              playSound('success');
-              onStartNow(); // will be replaced by proper start
-            }
+            // Accept the signal even if clicked slightly late — startCountdown
+            // will begin immediately in that case.
+            window.history.replaceState({}, '', window.location.pathname);
+            playSound('success');
+            onStartNow(signal.startTime);
           }
         } catch { /* ignore */ }
       }
@@ -90,28 +90,27 @@ export default function MemberWaitingScreen({
       setStartError('請輸入至少 6 位開始代碼');
       return;
     }
-    // Parse as timestamp? Or use a simple approach: treat code as seconds-to-start if numeric, or accept the startTime as ISO-like
-    // Simpler: the leader shows a code of form "START-EPOCHMS" - decode it
+    // Leader's manual start code has the form "START-<epoch ms>"
     if (code.startsWith('START')) {
       const parts = code.split('-');
       if (parts.length >= 2) {
         const ts = parseInt(parts[1]);
-        if (!isNaN(ts) && ts > Date.now() - 5000) {
+        if (!isNaN(ts) && ts > Date.now() - 600000) {
           playSound('success');
           setStartCode('');
           setShowStartInput(false);
-          onStartNow();
+          onStartNow(ts);
           return;
         }
       }
     }
     // Fallback: if numeric code is epoch seconds
     const ts = parseInt(code);
-    if (!isNaN(ts) && ts > Date.now() / 1000 - 60) {
+    if (!isNaN(ts) && ts > Date.now() / 1000 - 600) {
       playSound('success');
       setStartCode('');
       setShowStartInput(false);
-      onStartNow();
+      onStartNow(ts * 1000);
       return;
     }
     setStartError('無效的開始代碼，請向領袖確認');
@@ -182,7 +181,7 @@ export default function MemberWaitingScreen({
             <p className="text-2xl font-bold text-emerald-400">遊戲已開始！</p>
             <GlowButton
               title="開始尋寶"
-              onClick={onStartNow}
+              onClick={() => onStartNow()}
               variant="primary"
               size="lg"
               className="mt-6"

@@ -7,6 +7,7 @@ import {
   CheckCircle2, AlertTriangle, Lightbulb, Share2, Lock
 } from 'lucide-react';
 import { ViewType } from '../lib/types';
+import CopyrightFooter from '../components/CopyrightFooter';
 
 interface Props {
   onBack: () => void;
@@ -464,7 +465,7 @@ export default function HelpScreen({ onBack }: Props) {
       {/* Footer */}
       <div className="border-t border-slate-800 p-6 text-center">
         <p className="text-xs text-slate-500 mb-2">🎯 Radar Hunt v2.0 • GPS 真人尋寶</p>
-        <p className="text-[10px] text-slate-600 tracking-widest font-bold">COPYRIGHT 2026 SKWSCOUT</p>
+        <CopyrightFooter />
       </div>
     </div>
   );

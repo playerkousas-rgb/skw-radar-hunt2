@@ -1,7 +1,6 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { Checkpoint } from '../lib/types';
-import { formatDistance } from '../lib/utils';
 
 interface Props {
   checkpoints: Checkpoint[];
@@ -16,6 +15,8 @@ interface Props {
   height?: string | number;
   darkMode?: boolean;
   leaderMode?: boolean;
+  /** 越野式：未輪到的檢查點顯示為鎖定（灰階） */
+  courseMode?: boolean;
   pendingLat?: number | null;
   pendingLng?: number | null;
   pendingEmoji?: string;
@@ -48,6 +49,7 @@ export default function LiveMapView({
   height = '100%',
   darkMode = true,
   leaderMode = false,
+  courseMode = false,
   pendingLat = null,
   pendingLng = null,
   pendingEmoji = '📍',
@@ -56,8 +58,24 @@ export default function LiveMapView({
 }: Props) {
   const zoom = rangeToZoom(zoomRange);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const fullscreenIframeRef = useRef<HTMLIFrameElement>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [readyNonce, setReadyNonce] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Freeze the initial center (lazy state, set once) — the iframe HTML is
+  // memoized; live position updates are pushed via postMessage instead of
+  // rebuilding the whole map (rebuilding on every GPS fix made the map flash
+  // and lose pan/zoom).
+  const [initialCenter] = useState(() => ({ lat: userLat, lng: userLng }));
+  const initLat = initialCenter.lat;
+  const initLng = initialCenter.lng;
+
+  const postToMaps = useCallback((msg: object) => {
+    const payload = JSON.stringify(msg);
+    try { iframeRef.current?.contentWindow?.postMessage(payload, '*'); } catch { /* ignore */ }
+    try { fullscreenIframeRef.current?.contentWindow?.postMessage(payload, '*'); } catch { /* ignore */ }
+  }, []);
 
   // Listen for messages from iframe
   useEffect(() => {
@@ -73,14 +91,20 @@ export default function LiveMapView({
         }
         if (data.type === 'map_ready') {
           setMapReady(true);
+          setReadyNonce(n => n + 1);
         }
-      } catch {}
+      } catch { /* not a JSON message from the map iframe */ }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [onMapClick, onCPPress, checkpoints]);
 
   const markersJSON = useMemo(() => {
+    // 越野式：第一個未找到的是「進行中」，之後全部鎖定
+    let firstUnfoundIdx = -1;
+    if (courseMode) {
+      firstUnfoundIdx = checkpoints.findIndex(cp => !foundIds.includes(cp.id));
+    }
     return JSON.stringify(
       checkpoints.map((cp, idx) => ({
         id: cp.id,
@@ -90,12 +114,14 @@ export default function LiveMapView({
         label: cp.label,
         radius: cp.radius,
         found: foundIds.includes(cp.id),
+        points: (cp.points && cp.points > 0) ? cp.points : 1,
         hint: cp.hint || '',
         hasContent: !!(cp.content || cp.imageUrl),
         order: idx + 1,
+        locked: courseMode && firstUnfoundIdx !== -1 && idx > firstUnfoundIdx,
       }))
     );
-  }, [checkpoints, foundIds]);
+  }, [checkpoints, foundIds, courseMode]);
 
   const mapHTML = useMemo(() => {
     const tileUrl = darkMode
@@ -104,22 +130,6 @@ export default function LiveMapView({
     const tileAttr = darkMode
       ? '&copy; OSM &copy; CARTO'
       : '&copy; OpenStreetMap';
-
-    const pendingMarkerJS = (pendingLat !== null && pendingLng !== null) ? `
-      var pendingCircle = L.circle([${pendingLat}, ${pendingLng}], {
-        radius: ${pendingRadius},
-        color: '#00F0FF',
-        fillColor: 'rgba(0,240,255,0.15)',
-        fillOpacity: 0.6,
-        weight: 2,
-        dashArray: '6,4'
-      }).addTo(map);
-      var pendingIcon = L.divIcon({
-        html: '<div class="pending-marker">${pendingEmoji}</div>',
-        className: '', iconSize: [44, 44], iconAnchor: [22, 22]
-      });
-      L.marker([${pendingLat}, ${pendingLng}], { icon: pendingIcon, zIndexOffset: 2000 }).addTo(map);
-    ` : '';
 
     return `<!DOCTYPE html>
 <html>
@@ -142,12 +152,21 @@ export default function LiveMapView({
     }
     .emoji-marker:hover { transform: scale(1.15); }
     .emoji-marker.found { border-color: #10B981; background: rgba(16,185,129,0.25); }
+    .emoji-marker.locked { border-color: #475569; background: rgba(71,85,105,0.2); filter: grayscale(0.9); opacity: 0.55; }
     .marker-order {
       position: absolute; top: -8px; right: -8px;
       background: ${darkMode ? '#111827' : '#fff'}; color: #00F0FF;
       font-size: 9px; font-weight: 800; width: 18px; height: 18px;
       border-radius: 50%; display: flex; align-items: center; justify-content: center;
       border: 1.5px solid #00F0FF; font-family: monospace;
+    }
+    .marker-points {
+      position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+      background: #F59E0B; color: #1C1917;
+      font-size: 9px; font-weight: 900; padding: 1px 6px;
+      border-radius: 999px; white-space: nowrap;
+      border: 1.5px solid #78350F; font-family: monospace;
+      box-shadow: 0 1px 6px rgba(245,158,11,0.5);
     }
     .pending-marker {
       display: flex; align-items: center; justify-content: center;
@@ -272,7 +291,7 @@ export default function LiveMapView({
   <div class="scale-badge" id="scaleBadge"></div>
   <script>
     var map = L.map('map', {
-      center: [${userLat}, ${userLng}],
+      center: [${initLat}, ${initLng}],
       zoom: ${zoom},
       zoomControl: true,
       attributionControl: false
@@ -283,10 +302,11 @@ export default function LiveMapView({
 
     // User marker
     ${showUser ? `
+    var userPulseMarker = null, userDotMarker = null;
     var userPulseIcon = L.divIcon({ html: '<div class="user-pulse"></div>', className: '', iconSize: [36, 36], iconAnchor: [18, 18] });
-    L.marker([${userLat}, ${userLng}], { icon: userPulseIcon, zIndexOffset: 900 }).addTo(map);
+    userPulseMarker = L.marker([${initLat}, ${initLng}], { icon: userPulseIcon, zIndexOffset: 900 }).addTo(map);
     var userDotIcon = L.divIcon({ html: '<div class="user-marker"></div>', className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
-    L.marker([${userLat}, ${userLng}], { icon: userDotIcon, zIndexOffset: 1000 }).addTo(map);
+    userDotMarker = L.marker([${initLat}, ${initLng}], { icon: userDotIcon, zIndexOffset: 1000 }).addTo(map);
     ` : ''}
 
     // Checkpoints
@@ -301,15 +321,19 @@ export default function LiveMapView({
       }).addTo(map);
 
       var icon = L.divIcon({
-        html: '<div class="emoji-marker ' + (m.found ? 'found' : '') + '">' + m.emoji + '<div class="marker-order">' + m.order + '</div></div>',
+        html: '<div class="emoji-marker ' + (m.found ? 'found ' : '') + (m.locked ? 'locked' : '') + '">' + m.emoji +
+          '<div class="marker-order">' + (m.locked ? '🔒' : m.order) + '</div>' +
+          (m.points > 1 && !m.locked ? '<div class="marker-points">⭐' + m.points + '</div>' : '') +
+          '</div>',
         className: '', iconSize: [34, 34], iconAnchor: [17, 17]
       });
       var marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
 
       var popupHTML = '<div class="cp-popup">' +
         '<div class="cp-name">#' + m.order + ' ' + m.emoji + ' ' + m.label + '</div>' +
-        '<div class="cp-meta">' + m.lat.toFixed(5) + ', ' + m.lng.toFixed(5) + ' • ' + m.radius + 'm</div>' +
+        '<div class="cp-meta">' + m.lat.toFixed(5) + ', ' + m.lng.toFixed(5) + ' • ' + m.radius + 'm • ⭐' + m.points + '分</div>' +
         (m.found ? '<div class="cp-found">✓ 已找到!</div>' : '') +
+        (m.locked ? '<div class="cp-meta" style="margin-top:3px;color:#94A3B8">🔒 越野式：依序解鎖</div>' : '') +
         (m.hint && !m.found ? '<div class="cp-meta" style="margin-top:3px;font-style:italic">💡 ' + m.hint + '</div>' : '') +
         (m.hasContent ? '<div class="cp-content-hint">📄 有內容</div>' : '') +
         '</div>';
@@ -319,7 +343,6 @@ export default function LiveMapView({
       });
     });
 
-    ${pendingMarkerJS}
 
     // Map click
     map.on('click', function(e) {
@@ -347,9 +370,9 @@ export default function LiveMapView({
     updateScale();
 
     // Fit bounds
-    ${checkpoints.length > 0 ? `
+    ${markersJSON.length > 0 ? `
     var allPts = markers.map(function(m) { return [m.lat, m.lng]; });
-    ${showUser ? `allPts.push([${userLat}, ${userLng}]);` : ''}
+    ${showUser ? `allPts.push([${initLat}, ${initLng}]);` : ''}
     if (allPts.length > 1) map.fitBounds(allPts, { padding: [50, 50], maxZoom: ${zoom} });
     ` : ''}
 
@@ -402,11 +425,68 @@ export default function LiveMapView({
       }
     });
 
+    // Live updates from the host app (no iframe reload needed)
+    var pendingCircle = null, pendingMarker = null;
+    function pendingIconFor(emoji) {
+      return L.divIcon({
+        html: '<div class="pending-marker">' + emoji + '</div>',
+        className: '', iconSize: [44, 44], iconAnchor: [22, 22]
+      });
+    }
+    window.addEventListener('message', function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        if (d.type === 'set_user_position') {
+          if (userPulseMarker) userPulseMarker.setLatLng([d.lat, d.lng]);
+          if (userDotMarker) userDotMarker.setLatLng([d.lat, d.lng]);
+        } else if (d.type === 'set_pending') {
+          var ll = [d.lat, d.lng];
+          if (d.lat === null || d.lng === null) {
+            if (pendingCircle) { map.removeLayer(pendingCircle); pendingCircle = null; }
+            if (pendingMarker) { map.removeLayer(pendingMarker); pendingMarker = null; }
+            return;
+          }
+          if (!pendingCircle) {
+            pendingCircle = L.circle(ll, {
+              radius: d.radius, color: '#00F0FF',
+              fillColor: 'rgba(0,240,255,0.15)', fillOpacity: 0.6,
+              weight: 2, dashArray: '6,4'
+            }).addTo(map);
+            pendingMarker = L.marker(ll, { icon: pendingIconFor(d.emoji), zIndexOffset: 2000 }).addTo(map);
+          } else {
+            pendingCircle.setLatLng(ll).setRadius(d.radius);
+            pendingMarker.setLatLng(ll);
+            pendingMarker.setIcon(pendingIconFor(d.emoji));
+          }
+        }
+      } catch(err) {}
+    });
+
     window.parent.postMessage(JSON.stringify({ type: 'map_ready' }), '*');
   </script>
 </body>
 </html>`;
-  }, [userLat, userLng, zoom, markersJSON, showUser, interactive, darkMode, checkpoints.length, leaderMode, pendingLat, pendingLng, pendingEmoji, pendingRadius]);
+  }, [initLat, initLng, zoom, markersJSON, showUser, darkMode, leaderMode]);
+
+  // Push live user position into the map iframes (avoids full reloads).
+  // readyNonce re-fires after every iframe (re)load so freshly loaded maps
+  // immediately receive the latest position/pending state.
+  useEffect(() => {
+    if (!mapReady || !showUser) return;
+    postToMaps({ type: 'set_user_position', lat: userLat, lng: userLng });
+  }, [userLat, userLng, mapReady, showUser, readyNonce, postToMaps]);
+
+  // Push the leader's pending (not yet saved) marker into the map iframes
+  useEffect(() => {
+    if (!mapReady || !leaderMode) return;
+    postToMaps({
+      type: 'set_pending',
+      lat: pendingLat,
+      lng: pendingLng,
+      emoji: pendingEmoji,
+      radius: pendingRadius,
+    });
+  }, [pendingLat, pendingLng, pendingEmoji, pendingRadius, mapReady, leaderMode, readyNonce, postToMaps]);
 
   const normalHeight = typeof height === 'number' ? `${height}px` : height;
 
@@ -422,7 +502,7 @@ export default function LiveMapView({
           srcDoc={mapHTML}
           className="w-full h-full border-0"
           sandbox="allow-scripts allow-same-origin allow-popups"
-          title="Map"
+          title={interactive ? "Interactive Map" : "Map"}
         />
         {!mapReady && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0A0E1A]">
@@ -463,6 +543,7 @@ export default function LiveMapView({
 
           {/* Fullscreen Map */}
           <iframe
+            ref={fullscreenIframeRef}
             srcDoc={mapHTML}
             className="w-full h-full border-0"
             sandbox="allow-scripts allow-same-origin allow-popups"

@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit3, Share2, MapPin, Users,
   ArrowLeft, ChevronRight, Play, Trophy, Map, HelpCircle
 } from 'lucide-react';
-import { GameMap, DIFFICULTY_LABELS, DifficultyLevel } from '../lib/types';
+import { GameMap, DIFFICULTY_LABELS, DifficultyLevel, GAME_MODE_LABELS, GameModeType, TIMING_MODE_LABELS, TimingModeType } from '../lib/types';
 import { generateId } from '../lib/utils';
 import { loadMaps, saveMaps, deleteMap } from '../lib/storage';
 import { loadUserStats, updateUserStats } from '../lib/storage';
@@ -28,6 +28,11 @@ export default function LeaderHomeScreen({ onBack, onEditMap, onExportMap, onSta
   const [newMapDesc, setNewMapDesc] = useState('');
   const [creatorName, setCreatorName] = useState('');
   const [newMapDifficulty, setNewMapDifficulty] = useState<DifficultyLevel>('normal');
+  const [newGameMode, setNewGameMode] = useState<GameModeType>('free');
+  const [newTimingMode, setNewTimingMode] = useState<TimingModeType>('stopwatch');
+  const [newTimeLimitMin, setNewTimeLimitMin] = useState(15);
+  const [newShowLocation, setNewShowLocation] = useState(true);
+  const [newNearbyHints, setNewNearbyHints] = useState(true);
   const [stats, setStats] = useState({ totalMapsCreated: 0, totalCheckpoints: 0 });
 
   useEffect(() => {
@@ -63,6 +68,11 @@ export default function LeaderHomeScreen({ onBack, onEditMap, onExportMap, onSta
       centerLng: 121.565,
       zoomRange: 2000,
       difficulty: newMapDifficulty,
+      gameMode: newGameMode,
+      timingMode: newTimingMode,
+      timeLimitSec: newTimingMode === 'countdown' ? newTimeLimitMin * 60 : undefined,
+      showUserLocation: newShowLocation,
+      nearbyHints: newNearbyHints,
     };
 
     const updated = [...maps, newMap];
@@ -76,6 +86,10 @@ export default function LeaderHomeScreen({ onBack, onEditMap, onExportMap, onSta
 
     setNewMapName('');
     setNewMapDesc('');
+    setNewGameMode('free');
+    setNewTimingMode('stopwatch');
+    setNewShowLocation(true);
+    setNewNearbyHints(true);
     setShowCreate(false);
     playSound('success');
 
@@ -182,6 +196,118 @@ export default function LeaderHomeScreen({ onBack, onEditMap, onExportMap, onSta
                 onChange={(e) => setCreatorName(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
               />
+              {/* 玩法 */}
+              <div>
+                <label className="text-xs text-slate-500 mb-2 block">玩法模式</label>
+                <div className="space-y-2">
+                  {(Object.keys(GAME_MODE_LABELS) as GameModeType[]).map(mode => {
+                    const m = GAME_MODE_LABELS[mode];
+                    const active = newGameMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        onClick={() => setNewGameMode(mode)}
+                        className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all ${
+                          active ? 'bg-cyan-500/20 border-cyan-500' : 'bg-slate-800 border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <span className="text-2xl shrink-0">{m.icon}</span>
+                        <div className="min-w-0">
+                          <div className={`font-bold text-sm ${active ? 'text-cyan-300' : 'text-slate-200'}`}>{m.label}</div>
+                          <div className="text-[11px] text-slate-500 leading-snug">{m.desc}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 計時 */}
+              <div>
+                <label className="text-xs text-slate-500 mb-2 block">計時方式</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(Object.keys(TIMING_MODE_LABELS) as TimingModeType[]).map(tmode => {
+                    const t = TIMING_MODE_LABELS[tmode];
+                    const active = newTimingMode === tmode;
+                    return (
+                      <button
+                        key={tmode}
+                        onClick={() => setNewTimingMode(tmode)}
+                        className={`py-2.5 px-1 rounded-lg text-center transition-all ${
+                          active ? 'bg-violet-500 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        <div className="text-lg">{t.icon}</div>
+                        <div className="text-[10px] mt-0.5">{t.label}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {newTimingMode === 'countdown' && (
+                  <div className="mt-2">
+                    <label className="text-[11px] text-slate-500 mb-1.5 block">
+                      限時：<span className="text-violet-300 font-bold">{newTimeLimitMin} 分鐘</span>（時間到自動結算）
+                    </label>
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {[5, 10, 15, 20, 30, 45, 60].filter((v, i, a) => a.length <= 6 || i < 6).map(min => (
+                        <button
+                          key={min}
+                          onClick={() => setNewTimeLimitMin(min)}
+                          className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            newTimeLimitMin === min ? 'bg-violet-500 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          }`}
+                        >
+                          {min}m
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 顯示與提示 */}
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500 block">顯示與提示</label>
+
+                <div className="flex items-center gap-3 p-3 bg-slate-800 border border-slate-700 rounded-xl">
+                  <span className="text-xl shrink-0">📍</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-slate-200">顯示自身位置</div>
+                    <div className="text-[11px] text-slate-500 leading-snug">關閉後地圖不顯示你的位置點（考驗方向感，GPS 仍會記錄）</div>
+                  </div>
+                  <button
+                    onClick={() => setNewShowLocation(!newShowLocation)}
+                    className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${newShowLocation ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                    aria-label="顯示自身位置"
+                  >
+                    <motion.div
+                      className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
+                      animate={{ left: newShowLocation ? 'calc(100% - 1.5rem)' : '0.25rem' }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-slate-800 border border-slate-700 rounded-xl">
+                  <span className="text-xl shrink-0">🔔</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-slate-200">提示目標在附近</div>
+                    <div className="text-[11px] text-slate-500 leading-snug">關閉後接近寶藏時不再有提示音、「在範圍內」通知</div>
+                  </div>
+                  <button
+                    onClick={() => setNewNearbyHints(!newNearbyHints)}
+                    className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${newNearbyHints ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                    aria-label="提示目標在附近"
+                  >
+                    <motion.div
+                      className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-md"
+                      animate={{ left: newNearbyHints ? 'calc(100% - 1.5rem)' : '0.25rem' }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs text-slate-500 mb-2 block">路線難度</label>
                 <div className="grid grid-cols-4 gap-2">

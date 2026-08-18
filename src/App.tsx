@@ -6,14 +6,14 @@ import {
   addTreasureHistory, clearFoundCheckpoints,
   updateUserStats, loadUserStats, loadSettings, saveSettings,
   unlockAchievement, saveActiveSession, loadActiveSession,
-  addPlayerResult, loadLeaderboard, addLeaderboardEntry, saveSessionToHistory,
-  loadFoundLog,
+  addPlayerResult, addLeaderboardEntry, saveSessionToHistory,
 } from './lib/storage';
 import TreasureLogScreen from './screens/TreasureLogScreen';
 import {
   calculateDistance, playSound,
   vibrateDevice, generateId, generateRoomCode, generateVerificationCode,
   filterGPS, createGPSFilter, mapChecksum, encodeMapForExport, decodeMapFromExport,
+  sumCheckpointPoints,
 } from './lib/utils';
 
 // Screens
@@ -76,10 +76,11 @@ function App() {
   // Parse URL for import / start signal / join
   const parseURLParams = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
-    const result: { import?: string; start?: string; join?: string } = {};
+    const result: { import?: string; start?: string; join?: string; auto?: string } = {};
     if (params.get('import')) result.import = params.get('import')!;
     if (params.get('start')) result.start = params.get('start')!;
     if (params.get('join')) result.join = params.get('join')!;
+    if (params.get('auto')) result.auto = params.get('auto')!;
     return result;
   }, []);
 
@@ -89,6 +90,14 @@ function App() {
       if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
     };
   }, []);
+
+  // Persist the personal-auto-start delay (seconds) from an `&auto=N` link param
+  const stashAutoStart = (raw?: string) => {
+    const sec = parseInt(raw || '');
+    if (!isNaN(sec) && sec > 0 && sec <= 600) {
+      sessionStorage.setItem('autoStartSec', String(sec));
+    }
+  };
 
   const initApp = async () => {
     const [savedRole, savedMap, userSettings, savedSession] = await Promise.all([
@@ -148,13 +157,20 @@ function App() {
     if (urlParams.import) {
       const map = decodeMapFromExport(urlParams.import);
       if (map) {
-        map.id = generateId();
+        // If the same map (same coordinates) is already active, keep its id so
+        // found-checkpoint progress survives a refresh / re-scanned QR code.
+        if (savedMap && mapChecksum(savedMap) === mapChecksum(map)) {
+          map.id = savedMap.id;
+        } else {
+          map.id = generateId();
+        }
         map.createdAt = Date.now();
         await saveActiveMap(map);
         setActiveMap(map);
 
         // If start signal is also present, go straight to countdown
         if (urlParams.start && tryStartCountdown(map, urlParams.join, urlParams.start)) {
+          window.history.replaceState({}, '', window.location.pathname);
           checkGPSPermission();
           return;
         }
@@ -165,6 +181,7 @@ function App() {
         if (urlParams.join && urlParams.join !== 'AUTO') {
           sessionStorage.setItem('pendingJoinCode', urlParams.join.toUpperCase());
         }
+        if (urlParams.auto) stashAutoStart(urlParams.auto);
         setView('member-join');
         checkGPSPermission();
         // Clean URL
@@ -211,6 +228,7 @@ function App() {
       setRole('member');
       await saveRole('member');
       sessionStorage.setItem('pendingJoinCode', urlParams.join.toUpperCase());
+      if (urlParams.auto) stashAutoStart(urlParams.auto);
       setView('member-join');
       checkGPSPermission();
       return;
@@ -258,6 +276,24 @@ function App() {
   };
 
   const startCountdown = async (startTime: number, map: GameMap, sess: GameSession) => {
+    const beginHunt = async () => {
+      huntStartTime.current = startTime;
+      totalDistance.current = 0;
+      lastPosition.current = null;
+      gpsFilter.current = createGPSFilter();
+      setFoundCheckpoints([]);
+      await saveFoundCheckpoints(map.id, []);
+      // Update session status
+      const running: GameSession = { ...sess, status: 'running' };
+      await saveActiveSession(running);
+      setSession(running);
+      setActiveMap(map);
+      setView('member-radar');
+      if (settings.soundEnabled) playSound('success');
+      if (settings.vibrationEnabled) vibrateDevice([100, 50, 200]);
+      if (gpsPermission !== 'granted') setShowGPSModal(true);
+    };
+
     const now = Date.now();
     if (startTime > now) {
       // Countdown to start
@@ -265,15 +301,7 @@ function App() {
       setView('member-waiting');
     } else {
       // Start immediately
-      huntStartTime.current = startTime;
-      totalDistance.current = 0;
-      lastPosition.current = null;
-      gpsFilter.current = createGPSFilter();
-      setFoundCheckpoints([]);
-      await saveFoundCheckpoints(map.id, []);
-      setActiveMap(map);
-      setView('member-radar');
-      if (gpsPermission !== 'granted') setShowGPSModal(true);
+      await beginHunt();
       return;
     }
 
@@ -281,21 +309,10 @@ function App() {
     const tick = () => {
       const remaining = startTime - Date.now();
       if (remaining <= 0) {
-        setCountdown(null);
-        huntStartTime.current = startTime;
-        totalDistance.current = 0;
-        lastPosition.current = null;
-        gpsFilter.current = createGPSFilter();
-        setFoundCheckpoints([]);
-        saveFoundCheckpoints(map.id, []);
-        // Update session status
-        const running: GameSession = { ...sess, status: 'running' };
-        saveActiveSession(running);
-        setSession(running);
-        setActiveMap(map);
-        setView('member-radar');
-        if (settings.soundEnabled) playSound('success');
-        if (settings.vibrationEnabled) vibrateDevice([100, 50, 200]);
+        // Show "GO!" briefly, then dismiss the overlay and begin
+        setCountdown(0);
+        beginHunt();
+        setTimeout(() => setCountdown(null), 900);
         return;
       }
       setCountdown(Math.ceil(remaining / 1000));
@@ -380,7 +397,11 @@ function App() {
 
   const checkCheckpointArrival = async (loc: { lat: number; lng: number; accuracy?: number }) => {
     if (!activeMap || gpsPermission !== 'granted') return;
-    const unfound = activeMap.checkpoints.filter(cp => !foundCheckpoints.includes(cp.id));
+    let unfound = activeMap.checkpoints.filter(cp => !foundCheckpoints.includes(cp.id));
+    // 越野式 (course): only the next checkpoint in the leader-set order can trigger
+    if ((activeMap.gameMode || 'free') === 'course' && unfound.length > 0) {
+      unfound = [unfound[0]];
+    }
 
     for (const cp of unfound) {
       const dist = calculateDistance(loc.lat, loc.lng, cp.latitude, cp.longitude);
@@ -409,6 +430,9 @@ function App() {
     const finishTime = Date.now();
     const timeSpent = Math.max(1, Math.floor((finishTime - startTime) / 1000));
     const dist = Math.floor(totalDistance.current);
+    // Capture-points score (default 1 point per checkpoint)
+    const score = sumCheckpointPoints(activeMap.checkpoints, finalFoundList);
+    const totalScore = sumCheckpointPoints(activeMap.checkpoints);
 
     const historyEntry = {
       id: generateId(),
@@ -419,13 +443,15 @@ function App() {
       totalCheckpoints: activeMap.checkpoints.length,
       timeSpent,
       distanceWalked: dist,
+      score,
+      totalScore,
     };
 
     await addTreasureHistory(historyEntry);
 
-    // Leaderboard entry
+    // Leaderboard entry (unique id per run — the same player can appear multiple times)
     await addLeaderboardEntry({
-      id: playerId,
+      id: generateId(),
       playerName: settings.playerName || '尋寶者',
       mapId: activeMap.id,
       mapName: activeMap.name,
@@ -434,6 +460,8 @@ function App() {
       timeSpent,
       completedAt: finishTime,
       distanceWalked: dist,
+      score,
+      totalScore,
     });
 
     // Update stats
@@ -467,6 +495,10 @@ function App() {
       checkpointsFound: finalFoundList.length,
       totalCheckpoints: activeMap.checkpoints.length,
       distanceWalked: dist,
+      score,
+      totalScore,
+      gameMode: activeMap.gameMode || 'free',
+      timingMode: activeMap.timingMode || 'stopwatch',
       verificationCode: generateVerificationCode(sessionCode),
     };
 
@@ -524,7 +556,11 @@ function App() {
     setActiveMap(null);
     setFoundCheckpoints([]);
     setSession(null);
+    setFinalResult(null);
+    setCountdown(null);
     huntStartTime.current = 0;
+    totalDistance.current = 0;
+    lastPosition.current = null;
   };
 
   // Create a new session from leader side
@@ -550,6 +586,45 @@ function App() {
     setSession(newSession);
     setActiveMap(map);
     setView('leader-session');
+  };
+
+  // Personal auto-start mode: member opened a link with &auto=N — join the room
+  // and start the hunt after the personal countdown. Time is counted from the
+  // member's own start moment, so differing departure times stay fair.
+  const handleAutoStartSession = async (map: GameMap, code: string, delaySec: number, name?: string) => {
+    let playerName = settings.playerName || '尋寶者';
+    if (name && name.trim()) {
+      playerName = name.trim().slice(0, 15);
+      const existing = await loadSettings();
+      await saveSettings({ ...existing, playerName });
+      setSettings({ ...existing, playerName });
+    }
+
+    await saveActiveMap(map);
+    setActiveMap(map);
+    await saveFoundCheckpoints(map.id, []);
+    setFoundCheckpoints([]);
+
+    const startTime = Date.now() + delaySec * 1000;
+    const newSession: GameSession = {
+      code: code.toUpperCase(),
+      mapId: map.id,
+      mapName: map.name,
+      creatorName: '領袖',
+      createdAt: Date.now(),
+      startTime,
+      players: [{
+        id: playerId,
+        name: playerName,
+        joinedAt: Date.now(),
+        ready: true,
+        finishedAt: null,
+      }],
+      status: 'starting',
+    };
+    await saveActiveSession(newSession);
+    setSession(newSession);
+    await startCountdown(startTime, map, newSession);
   };
 
   // Join session by code (member)
@@ -580,6 +655,13 @@ function App() {
     await saveActiveSession(newSession);
     setSession(newSession);
     setView('member-waiting');
+  };
+
+  // Clear the member's found progress for the active map (storage + state in sync)
+  const handleClearProgress = async () => {
+    if (!activeMap) return;
+    await clearFoundCheckpoints(activeMap.id);
+    setFoundCheckpoints([]);
   };
 
   // Broadcast channel for same-device/tab sync (testing)
@@ -750,7 +832,9 @@ function App() {
             onBack={() => setView('role-select')}
             onJoinSession={handleJoinSession}
             onOpenImport={() => setView('member-import')}
+            onAutoStart={handleAutoStartSession}
             initialCode={sessionStorage.getItem('pendingJoinCode') || ''}
+            initialMap={activeMap}
           />
         ) : view === 'member-waiting' && session && activeMap ? (
           <MemberWaitingScreen
@@ -760,7 +844,7 @@ function App() {
             currentLocation={currentLocation}
             gpsAccuracy={currentLocation.accuracy}
             onBack={() => setView('role-select')}
-            onStartNow={() => startCountdown(Date.now(), activeMap, session)}
+            onStartNow={(startTime?: number) => startCountdown(startTime ?? Date.now(), activeMap, session)}
           />
         ) : view === 'member-radar' && activeMap ? (
           <RadarScreen
@@ -772,6 +856,7 @@ function App() {
             gpsEnabled={gpsPermission === 'granted'}
             session={session}
             startTime={huntStartTime.current}
+            onClearProgress={handleClearProgress}
             onFinishHunt={() => completeHunt(foundCheckpoints)}
           />
         ) : view === 'result' && finalResult ? (

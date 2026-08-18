@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Gift, FileText, Image as ImageIcon, Link as LinkIcon, Smile } from 'lucide-react';
 import { Checkpoint } from '../lib/types';
+import { getCheckpointPoints } from '../lib/utils';
 
 interface Props {
   isOpen: boolean;
@@ -91,6 +92,16 @@ export default function TreasureFoundCard({ isOpen, checkpoint, progress, onClos
                     <CheckCircle size={16} className="text-emerald-400" />
                     <span className="text-xs font-bold text-emerald-400">發現寶藏！</span>
                   </motion.div>
+                  {getCheckpointPoints(checkpoint) > 1 && (
+                    <motion.div
+                      initial={{ scale: 0, rotate: -20 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ delay: 0.5, type: 'spring' }}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-500/20 rounded-full border border-amber-500/40"
+                    >
+                      <span className="text-xs font-black text-amber-400">⭐ +{getCheckpointPoints(checkpoint)} 分</span>
+                    </motion.div>
+                  )}
                   <button 
                     onClick={onClose}
                     className="p-2 hover:bg-slate-700/50 rounded-full transition-colors"

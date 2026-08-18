@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft, Users, ChevronRight, AlertCircle,
-  FileText, Download, ArrowRight, Check
+  ArrowLeft, Users, ChevronRight, AlertCircle, FileText, Download, ArrowRight, Check, Timer, XCircle, User
 } from 'lucide-react';
 import { GameMap } from '../lib/types';
 import { decodeMapFromExport, playSound } from '../lib/utils';
@@ -12,15 +11,27 @@ interface Props {
   onBack: () => void;
   onJoinSession: (code: string, map: GameMap) => void;
   onOpenImport: () => void;
+  /** Personal auto-start mode: join + start after countdown (fairest timing) */
+  onAutoStart?: (map: GameMap, code: string, delaySec: number, name?: string) => void;
   initialCode?: string;
+  /** Map already imported from the link (App consumes the URL before this screen mounts) */
+  initialMap?: GameMap | null;
 }
 
-export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, initialCode }: Props) {
+export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, onAutoStart, initialCode, initialMap }: Props) {
   const [roomCode, setRoomCode] = useState(initialCode || '');
   const [importCode, setImportCode] = useState('');
   const [error, setError] = useState('');
-  const [activeMap, setActiveMap] = useState<GameMap | null>(null);
+  const [activeMap, setActiveMap] = useState<GameMap | null>(initialMap || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Personal auto-start mode state (link carried &auto=N)
+  const [autoSec] = useState(() => {
+    const v = parseInt(sessionStorage.getItem('autoStartSec') || '');
+    return !isNaN(v) && v > 0 ? v : 0;
+  });
+  const [autoCancelled, setAutoCancelled] = useState(false);
+  const [playerName, setPlayerName] = useState('');
 
   // Check URL for import data
   useEffect(() => {
@@ -35,6 +46,45 @@ export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, 
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  // Arm the countdown at mount when the link provided map + room code
+  // (both come from App and are available on first render)
+  const [autoLeft, setAutoLeft] = useState<number | null>(() => {
+    if (!autoSec) return null;
+    if (initialMap && (initialCode || '').trim().length >= 4) return autoSec;
+    return null;
+  });
+  const autoArmed = autoLeft !== null;
+
+  // Tick the countdown
+  useEffect(() => {
+    if (autoLeft === null || autoLeft <= 0) return;
+    const t = setTimeout(() => setAutoLeft(autoLeft - 1), 1000);
+    return () => clearTimeout(t);
+  }, [autoLeft]);
+
+  // Fire on zero (deferred to avoid synchronous state updates in the effect)
+  useEffect(() => {
+    if (autoLeft !== 0 || !activeMap || !onAutoStart) return;
+    const t = setTimeout(() => {
+      sessionStorage.removeItem('autoStartSec');
+      onAutoStart(activeMap, roomCode.trim().toUpperCase(), 0, playerName.trim() || undefined);
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLeft, activeMap]);
+
+  const cancelAuto = () => {
+    sessionStorage.removeItem('autoStartSec');
+    setAutoCancelled(true);
+    setAutoLeft(null);
+  };
+
+  const startNow = () => {
+    if (!activeMap || !onAutoStart) return;
+    sessionStorage.removeItem('autoStartSec');
+    onAutoStart(activeMap, roomCode.trim().toUpperCase(), 0, playerName.trim() || undefined);
+  };
 
   const handleImportCode = () => {
     setError('');
@@ -115,6 +165,69 @@ export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, 
             step === 'ready' && activeMap ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-500'
           }`}>3</div>
         </div>
+
+        {/* ⏱️ Personal auto-start mode (fairest timing) */}
+        {autoSec > 0 && !autoCancelled && autoArmed && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-emerald-500/15 to-cyan-500/15 rounded-2xl p-5 border border-emerald-500/40"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-emerald-300 flex items-center gap-2">
+                <Timer size={16} />
+                個人計時模式
+              </h3>
+              <button
+                onClick={cancelAuto}
+                className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1"
+              >
+                <XCircle size={14} /> 取消自動
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <motion.div
+                key={autoLeft}
+                initial={{ scale: 0.7, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className={`w-20 h-20 rounded-2xl flex items-center justify-center font-black text-4xl shrink-0 ${
+                  autoLeft <= 5 ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' : 'bg-slate-900 border border-emerald-500/40 text-emerald-400'
+                }`}
+              >
+                {autoLeft}
+              </motion.div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  倒數結束後<strong className="text-emerald-300">自動開始</strong>，計時從你出發那一刻起算 —
+                  各人出發時間不同也絕對公平。
+                </p>
+              </div>
+            </div>
+
+            {/* Name (for leaderboard / verification) */}
+            <div className="mt-3">
+              <label className="text-[11px] text-slate-500 mb-1 flex items-center gap-1">
+                <User size={12} /> 你的名字（排行榜顯示用）
+              </label>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                maxLength={15}
+                placeholder="不輸入則為「尋寶者」"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 text-sm"
+              />
+            </div>
+
+            <button
+              onClick={startNow}
+              className="w-full mt-3 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-900 rounded-xl font-bold text-sm transition-colors active:scale-95"
+            >
+              🚀 立即開始（不等倒數）
+            </button>
+          </motion.div>
+        )}
 
         {/* Room Code */}
         <motion.div

@@ -84,7 +84,7 @@ button{background:#00F0FF;color:#0A0E1A;border:none;padding:12px 24px;border-rad
 <p>匯入代碼:</p>
 <pre id="code">${encodedData}</pre>
 <button onclick="navigator.clipboard.writeText(document.getElementById('code').textContent)">複製代碼</button>
-<p style="margin-top:20px;font-size:12px;color:#64748B">Radar Hunt © 2026</p>
+<p style="margin-top:20px;font-size:12px;color:#64748B">Radar Hunt — COPYRIGHT © 2026 SCOUT SYSTEM. ALL RIGHTS RESERVED.</p>
 </body></html>`;
 
     const blob = new Blob([html], { type: 'text/html' });
