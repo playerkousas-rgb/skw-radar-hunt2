@@ -4,7 +4,8 @@ import {
   ArrowLeft, HelpCircle, ChevronDown, ChevronUp, Crown, Compass,
   MapPin, Users, Clock, Target, Trophy, Volume2, Vibrate, Map,
   QrCode, Flag, BookOpen, Signal, Shield, Zap, Wifi, Smartphone,
-  CheckCircle2, AlertTriangle, Lightbulb, Share2, Lock
+  CheckCircle2, AlertTriangle, Lightbulb, Share2, Lock,
+  Gamepad2, Timer, FlaskConical, Eye, BellOff
 } from 'lucide-react';
 import { ViewType } from '../lib/types';
 import CopyrightFooter from '../components/CopyrightFooter';
@@ -278,6 +279,97 @@ export default function HelpScreen({ onBack }: Props) {
       ],
     },
     {
+      id: 'gameplay',
+      icon: Gamepad2,
+      title: '玩法 × 計時 × 顯示選項（v2.4）',
+      color: 'text-orange-400',
+      bgColor: 'bg-orange-500/10',
+      content: [
+        {
+          title: '🎮 三種玩法模式',
+          body: (
+            <div className="space-y-2 text-slate-300 text-sm leading-relaxed">
+              <p>領袖建立地圖時可選擇玩法，會影響整個賽事規則：</p>
+              <div className="space-y-2">
+                <div className="bg-slate-800 rounded-lg p-2.5 border border-slate-700">
+                  <p className="font-bold text-amber-400">🏆 奪分式</p>
+                  <p className="text-xs text-slate-400">自由次序搶分；每個寶藏可設分數（1/2/3/5/10/20，未設為 1 分）。地圖與成績都會標示 ⭐ 分數，排行榜以「總分 → 用時」排序。</p>
+                </div>
+                <div className="bg-slate-800 rounded-lg p-2.5 border border-slate-700">
+                  <p className="font-bold text-orange-400">🧭 越野式</p>
+                  <p className="text-xs text-slate-400">檢查點必須<b className="text-orange-300">依指定次序</b>完成；未輪到的寶藏會顯示 🔒 灰階，靠近也不會觸發。適合定向賽事。</p>
+                </div>
+                <div className="bg-slate-800 rounded-lg p-2.5 border border-slate-700">
+                  <p className="font-bold text-emerald-400">🎯 自由尋寶</p>
+                  <p className="text-xs text-slate-400">無規則、自由次序，純粹找齊全部寶藏（只需設定計時）。</p>
+                </div>
+              </div>
+            </div>
+          ),
+        },
+        {
+          title: '⏱️ 三種計時方式',
+          body: (
+            <div className="space-y-2 text-slate-300 text-sm leading-relaxed">
+              <div className="space-y-2">
+                <div className="flex gap-2"><span className="text-cyan-400">⏱️</span><span><b className="text-cyan-400">計時模式</b>（預設）：向上計時，越快完成越強。</span></div>
+                <div className="flex gap-2"><span className="text-amber-400">⏳</span><span><b className="text-amber-400">倒計時模式</b>：限時 5–45 分鐘，剩 60 秒轉紅警示，<b className="text-red-400">時間到自動結算成績</b>。</span></div>
+                <div className="flex gap-2"><span className="text-slate-400">🚫</span><span><b className="text-slate-300">不限時</b>：完全不顯示計時，輕鬆玩。</span></div>
+              </div>
+              <p className="text-xs text-slate-500">三種玩法 × 三種計時可自由組合，例如「奪分式 + 倒計時 15 分」＝ 硬核搶分賽。</p>
+            </div>
+          ),
+        },
+        {
+          title: '⏱️ 個人計時模式（最公平，推薦）',
+          body: (
+            <div className="space-y-2 text-slate-300 text-sm leading-relaxed">
+              <p>開房間時可開啟「個人計時模式」（10/15/30/60 秒）。</p>
+              <ul className="space-y-1.5">
+                <li className="flex gap-2"><span className="text-violet-400">▸</span><span>成員掃 QR／點連結後，App 自動倒數後出發</span></li>
+                <li className="flex gap-2"><span className="text-violet-400">▸</span><span><b className="text-violet-400">計時從各人自己出發那一刻起算</b>，出發時間不同也完全公平</span></li>
+                <li className="flex gap-2"><span className="text-violet-400">▸</span><span>找齊全部寶藏或回到終點繳交成績，用時即個人成績</span></li>
+                <li className="flex gap-2"><span className="text-violet-400">▸</span><span>中途重新整理，計時不會歸零</span></li>
+              </ul>
+            </div>
+          ),
+        },
+        {
+          title: '📍 顯示選項（進階／硬核）',
+          body: (
+            <div className="space-y-2 text-slate-300 text-sm leading-relaxed">
+              <div className="flex gap-2"><Eye size={16} className="text-emerald-400 shrink-0 mt-0.5"/><span><b className="text-emerald-400">顯示自身位置</b>（預設開）：關閉後地圖不顯示你的位置點，改以寶藏中心定位——不會從視角洩露站位，考驗方向感；GPS 仍在背景記錄。</span></div>
+              <div className="flex gap-2"><BellOff size={16} className="text-amber-400 shrink-0 mt-0.5"/><span><b className="text-amber-400">提示目標在附近</b>（預設開）：關閉後接近寶藏不再有提示音、「在範圍內」通知與震動。</span></div>
+              <p className="text-xs text-slate-500">隱藏位置 + 關閉提示 + 倒計時 = 最高難度的硬核定向挑戰。</p>
+            </div>
+          ),
+        },
+      ],
+    },
+    {
+      id: 'demo',
+      icon: FlaskConical,
+      title: '🧪 模擬示範遊玩（免 GPS）',
+      color: 'text-emerald-400',
+      bgColor: 'bg-emerald-500/10',
+      content: [
+        {
+          title: '一鍵體驗完整流程',
+          body: (
+            <div className="space-y-2 text-slate-300 text-sm leading-relaxed">
+              <p>首頁按「<b className="text-emerald-300">🧪 模擬示範遊玩</b>」即可<b className="text-emerald-300">不需真實 GPS</b> 自動演練一次：</p>
+              <ol className="space-y-1.5 list-decimal list-inside">
+                <li>👑 模擬領袖建立一張「示範尋寶地圖」</li>
+                <li>🎯 以玩家身份加入，使用<b className="text-cyan-300">模擬定位</b>自動走訪每個寶藏</li>
+                <li>🏁 找齊後自動結算成績、顯示驗證碼</li>
+              </ol>
+              <p className="text-xs text-slate-500">適合測試、教學，或讓領袖在活動前先跑一遍流程，確認設定無誤。若 GPS 權限被拒，也可在彈窗中直接切換到模擬模式。</p>
+            </div>
+          ),
+        },
+      ],
+    },
+    {
       id: 'tips',
       icon: Lightbulb,
       title: '實用小貼士',
@@ -335,6 +427,10 @@ export default function HelpScreen({ onBack }: Props) {
               <div>
                 <p className="font-semibold text-slate-200">Q：如何清除進度重新玩？</p>
                 <p className="text-slate-400">A：雷達畫面右上 ⋮ 選單 →「清除進度」。</p>
+              </div>
+              <div>
+                <p className="font-semibold text-slate-200">Q：冇 GPS／想試玩下先？</p>
+                <p className="text-slate-400">A：首頁按「🧪 模擬示範遊玩」就可以免 GPS 自動跑完整流程；GPS 權限被拒時彈窗亦可一鍵切換模擬模式。</p>
               </div>
             </div>
           ),

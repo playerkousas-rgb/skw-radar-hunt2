@@ -13,8 +13,9 @@ import {
   calculateDistance, playSound,
   vibrateDevice, generateId, generateRoomCode, generateVerificationCode,
   filterGPS, createGPSFilter, mapChecksum, encodeMapForExport, decodeMapFromExport,
-  sumCheckpointPoints,
+  sumCheckpointPoints, getNearestCheckpoint,
 } from './lib/utils';
+import { createDemoMap } from './lib/demoMap';
 
 // Screens
 import RoleSelectScreen from './screens/RoleSelectScreen';
@@ -73,6 +74,105 @@ function App() {
   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
   const gpsFilter = useRef(createGPSFilter());
 
+  // ===== Mock / demo mode (no real GPS needed) =====
+  const [mockMode, setMockMode] = useState(false);
+  const mockInterval = useRef<number | null>(null);
+  const foundRef = useRef<Set<string>>(new Set());
+  const activeMapRef = useRef<GameMap | null>(null);
+  const currentLocationRef = useRef(currentLocation);
+  const checkArrivalRef = useRef<(loc: { lat: number; lng: number; accuracy?: number }) => void>(() => {});
+
+  // Keep refs in sync with latest state so the mock tick always reads fresh data
+  useEffect(() => { foundRef.current = new Set(foundCheckpoints); }, [foundCheckpoints]);
+  useEffect(() => { activeMapRef.current = activeMap; }, [activeMap]);
+  useEffect(() => { currentLocationRef.current = currentLocation; }, [currentLocation]);
+
+  const stopMockEngine = () => {
+    if (mockInterval.current !== null) {
+      clearInterval(mockInterval.current);
+      mockInterval.current = null;
+    }
+  };
+
+  // Auto-walk the "member" through the unfound checkpoints and let the normal
+  // arrival logic trigger finds — this simulates playing once end-to-end.
+  const mockTick = () => {
+    const map = activeMapRef.current;
+    if (!map) return;
+    const cur = currentLocationRef.current;
+    const unfound = map.checkpoints.filter(cp => !foundRef.current.has(cp.id));
+    if (unfound.length === 0) { stopMockEngine(); return; }
+
+    const mode = map.gameMode || 'free';
+    // 越野式必須依序；其他模式取最近未尋寶藏
+    const nearest = getNearestCheckpoint(unfound, cur.lat, cur.lng);
+    const target = mode === 'course' ? unfound[0] : (nearest?.checkpoint || unfound[0]);
+
+    const speedMps = 35;         // 模擬步行速度（加快以利測試）
+    const dtSec = 0.3;           // tick 間隔（秒）
+    const d = calculateDistance(cur.lat, cur.lng, target.latitude, target.longitude);
+    const step = Math.min(d, speedMps * dtSec);
+    const f = d > 0 ? step / d : 0;
+    let nlat = cur.lat + (target.latitude - cur.lat) * f;
+    let nlng = cur.lng + (target.longitude - cur.lng) * f;
+
+    // 已進入觸發範圍 → 直接對齊寶藏點，令抵達邏輯觸發
+    const trig = Math.max(target.radius, 5);
+    if (d <= trig) { nlat = target.latitude; nlng = target.longitude; }
+
+    const newLoc = { lat: nlat, lng: nlng, accuracy: 5 };
+    setCurrentLocation(newLoc);
+    currentLocationRef.current = newLoc;
+
+    // 累計模擬步行距離
+    if (lastPosition.current && huntStartTime.current > 0) {
+      totalDistance.current += calculateDistance(
+        lastPosition.current.lat, lastPosition.current.lng, newLoc.lat, newLoc.lng
+      );
+    }
+    lastPosition.current = { lat: nlat, lng: nlng };
+
+    checkArrivalRef.current(newLoc);
+  };
+
+  const startMockEngine = () => {
+    stopMockEngine();
+    mockInterval.current = window.setInterval(mockTick, 300);
+  };
+
+  // 模擬「領袖設置一張地圖 → 成員自動遊玩一次」的完整示範流程
+  const startMockHunt = async (demoMap: GameMap) => {
+    if (watchId.current) { navigator.geolocation.clearWatch(watchId.current); watchId.current = null; }
+    stopMockEngine();
+
+    await saveRole('member'); setRole('member');
+    await saveActiveMap(demoMap); setActiveMap(demoMap); activeMapRef.current = demoMap;
+    await saveFoundCheckpoints(demoMap.id, []); setFoundCheckpoints([]); foundRef.current = new Set();
+    await saveActiveSession(null); setSession(null);
+
+    setGpsPermission('granted'); setShowGPSModal(false);
+    setMockMode(true);
+
+    const startTime = Date.now();
+    huntStartTime.current = startTime;
+    totalDistance.current = 0;
+    lastPosition.current = null;
+    gpsFilter.current = createGPSFilter();
+
+    const center = {
+      lat: demoMap.centerLat || demoMap.checkpoints[0]?.latitude || currentLocation.lat,
+      lng: demoMap.centerLng || demoMap.checkpoints[0]?.longitude || currentLocation.lng,
+    };
+    const initLoc = { lat: center.lat, lng: center.lng, accuracy: 5 };
+    setCurrentLocation(initLoc);
+    currentLocationRef.current = initLoc;
+    lastPosition.current = { lat: initLoc.lat, lng: initLoc.lng };
+
+    setView('member-radar');
+    if (settings.soundEnabled) playSound('click');
+    startMockEngine();
+  };
+
   // Parse URL for import / start signal / join
   const parseURLParams = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
@@ -88,6 +188,7 @@ function App() {
     initApp();
     return () => {
       if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
+      if (mockInterval.current) clearInterval(mockInterval.current);
     };
   }, []);
 
@@ -422,6 +523,8 @@ function App() {
       }
     }
   };
+  // Keep the mock engine pointed at the latest arrival handler (after this definition)
+  checkArrivalRef.current = checkCheckpointArrival;
 
   const completeHunt = async (finalFound?: string[]) => {
     if (!activeMap) return;
@@ -549,18 +652,40 @@ function App() {
   };
 
   const handleLogout = async () => {
+    stopMockEngine();
+    setMockMode(false);
     await saveRole(null);
     await saveActiveSession(null);
     setRole(null);
     setView('role-select');
     setActiveMap(null);
+    activeMapRef.current = null;
     setFoundCheckpoints([]);
+    foundRef.current = new Set();
     setSession(null);
     setFinalResult(null);
     setCountdown(null);
     huntStartTime.current = 0;
     totalDistance.current = 0;
     lastPosition.current = null;
+  };
+
+  // Play again — also restart the mock engine when we're in demo mode
+  const handlePlayAgain = async () => {
+    setFinalResult(null);
+    setView('member-radar');
+    huntStartTime.current = session?.startTime && session.startTime < Date.now() + 60000
+      ? session.startTime
+      : Date.now();
+    totalDistance.current = 0;
+    lastPosition.current = null;
+    setFoundCheckpoints([]);
+    foundRef.current = new Set();
+    if (activeMap) {
+      await saveFoundCheckpoints(activeMap.id, []);
+      activeMapRef.current = activeMap;
+    }
+    if (mockMode) startMockEngine();
   };
 
   // Create a new session from leader side
@@ -736,6 +861,7 @@ function App() {
           status={gpsPermission}
           onRequestPermission={requestGPSPermission}
           onContinueAnyway={() => setShowGPSModal(false)}
+          onMockDemo={() => startMockHunt(createDemoMap())}
         />
       )}
 
@@ -761,6 +887,7 @@ function App() {
           onLogout={role ? handleLogout : undefined}
           playerName={settings.playerName}
           onShowHelp={() => setView('help')}
+          onMockDemo={() => startMockHunt(createDemoMap())}
         />
       ) : role === 'leader' ? (
         view === 'leader-home' ? (
@@ -864,16 +991,7 @@ function App() {
             result={finalResult}
             session={session}
             onBackToHome={handleLogout}
-            onPlayAgain={() => {
-              setFinalResult(null);
-              setView('member-radar');
-              huntStartTime.current = session?.startTime && session.startTime < Date.now() + 60000
-                ? session.startTime
-                : Date.now();
-              totalDistance.current = 0;
-              setFoundCheckpoints([]);
-              if (activeMap) saveFoundCheckpoints(activeMap.id, []);
-            }}
+            onPlayAgain={handlePlayAgain}
           />
         ) : view === 'leaderboard' ? (
           <LeaderboardScreen onBack={() => setView('member-radar')} />

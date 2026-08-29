@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Navigation, AlertCircle, CheckCircle, Settings } from 'lucide-react';
+import { MapPin, Navigation, AlertCircle, CheckCircle, Settings, FlaskConical } from 'lucide-react';
 import GlowButton from './GlowButton';
 
 interface Props {
@@ -8,9 +8,10 @@ interface Props {
   status: 'granted' | 'denied' | 'prompt' | 'unknown';
   onRequestPermission: () => void;
   onContinueAnyway: () => void;
+  onMockDemo?: () => void;
 }
 
-export default function GPSPermissionModal({ isOpen, status, onRequestPermission, onContinueAnyway }: Props) {
+export default function GPSPermissionModal({ isOpen, status, onRequestPermission, onContinueAnyway, onMockDemo }: Props) {
   const [showInstructions, setShowInstructions] = useState(false);
 
   if (!isOpen) return null;
@@ -90,12 +91,13 @@ export default function GPSPermissionModal({ isOpen, status, onRequestPermission
                       icon={<Navigation size={20} />}
                     />
                     
-                    {status === 'denied' && (
+                    {status === 'denied' && onMockDemo && (
                       <button
-                        onClick={onContinueAnyway}
-                        className="w-full py-3 text-slate-500 hover:text-slate-400 text-sm transition-colors"
+                        onClick={onMockDemo}
+                        className="w-full py-3 flex items-center justify-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-semibold transition-colors"
                       >
-                        繼續使用模擬模式（無法尋寶）
+                        <FlaskConical size={16} />
+                        改用模擬示範遊玩（免 GPS）
                       </button>
                     )}
                     

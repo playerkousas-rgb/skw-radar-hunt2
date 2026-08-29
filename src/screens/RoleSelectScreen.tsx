@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Crown, Search, LogOut, MapPin, Users, Compass, Gamepad2, User, HelpCircle } from 'lucide-react';
-import GlowButton from '../components/GlowButton';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Crown, Search, LogOut, MapPin, Users, Compass, Gamepad2, User, HelpCircle, FlaskConical, X } from 'lucide-react';
 import CopyrightFooter from '../components/CopyrightFooter';
 import { RoleType } from '../lib/types';
 import { loadSettings, saveSettings } from '../lib/storage';
@@ -12,11 +11,13 @@ interface Props {
   onLogout?: () => void;
   playerName?: string;
   onShowHelp?: () => void;
+  onMockDemo?: () => void;
 }
 
-export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, playerName, onShowHelp }: Props) {
+export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, playerName, onShowHelp, onMockDemo }: Props) {
   const [name, setName] = useState(playerName || '');
   const [editingName, setEditingName] = useState(!playerName || playerName === '尋寶者');
+  const [showDemoModal, setShowDemoModal] = useState(false);
 
   const handleSaveName = async () => {
     const trimmed = name.trim();
@@ -184,6 +185,26 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, 
           </motion.div>
         </div>
 
+        {/* Mock / Demo mode */}
+        {onMockDemo && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <button
+              onClick={() => setShowDemoModal(true)}
+              className="w-full flex items-center justify-center gap-2 mt-4 py-3 bg-gradient-to-r from-emerald-500/15 to-teal-500/15 border border-emerald-500/30 hover:border-emerald-500/60 rounded-2xl text-emerald-300 text-sm font-semibold transition-all active:scale-98"
+            >
+              <FlaskConical size={18} />
+              🧪 模擬示範遊玩（免 GPS）
+            </button>
+            <p className="text-center text-[11px] text-slate-500 mt-1.5">
+              不需定位，自動跑完「領袖設置 → 玩家尋寶」完整流程一次
+            </p>
+          </motion.div>
+        )}
+
         {/* Logout */}
         {currentRole && onLogout && (
           <motion.button
@@ -211,6 +232,60 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, 
           </div>
         </motion.div>
       </div>
+
+      {/* Demo mode confirmation modal */}
+      <AnimatePresence>
+        {showDemoModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowDemoModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 16 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 rounded-3xl p-6 max-w-sm w-full border border-slate-700"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-14 h-14 bg-emerald-500/15 rounded-2xl flex items-center justify-center text-3xl">
+                  🧪
+                </div>
+                <button onClick={() => setShowDemoModal(false)} className="p-1.5 text-slate-500 hover:text-slate-300">
+                  <X size={20} />
+                </button>
+              </div>
+              <h2 className="text-xl font-bold text-slate-100 mb-2">模擬示範遊玩</h2>
+              <div className="space-y-2 text-sm text-slate-400 leading-relaxed mb-5">
+                <p>這個功能<b className="text-emerald-300">不需要真實 GPS</b>，會自動演練一次完整流程：</p>
+                <ol className="space-y-1.5 list-decimal list-inside">
+                  <li>👑 模擬領袖建立一張「示範尋寶地圖」</li>
+                  <li>🎯 以玩家身份加入，使用<b className="text-cyan-300">模擬定位</b>自動走訪每個寶藏</li>
+                  <li>🏁 找齊後自動結算成績、顯示驗證碼</li>
+                </ol>
+                <p className="text-xs text-slate-500">適合測試、教學或讓領袖在活動前先跑一遍流程。</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDemoModal(false)}
+                  className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 font-semibold text-sm transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => { setShowDemoModal(false); onMockDemo?.(); }}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-slate-950 rounded-xl font-bold text-sm transition-all active:scale-95"
+                >
+                  開始示範
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
