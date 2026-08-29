@@ -670,6 +670,14 @@ function App() {
     lastPosition.current = null;
   };
 
+  // Leave the member radar back to home — must stop the mock engine so it
+  // doesn't keep walking (and mutating state) in the background.
+  const handleMemberBackToHome = () => {
+    stopMockEngine();
+    setMockMode(false);
+    setView('role-select');
+  };
+
   // Play again — also restart the mock engine when we're in demo mode
   const handlePlayAgain = async () => {
     setFinalResult(null);
@@ -978,7 +986,7 @@ function App() {
             map={activeMap}
             currentLocation={currentLocation}
             foundCheckpoints={foundCheckpoints}
-            onBack={() => setView('role-select')}
+            onBack={handleMemberBackToHome}
             onChangeView={setView}
             gpsEnabled={gpsPermission === 'granted'}
             session={session}
