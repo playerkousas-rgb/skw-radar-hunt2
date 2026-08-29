@@ -6,39 +6,14 @@ import {
 } from 'lucide-react';
 import { GameMap } from '../lib/types';
 import { encodeMapForExport, copyToClipboard, shareMap, playSound } from '../lib/utils';
+import QRCodeImage from '../components/QRCodeImage';
 
 interface Props {
   map: GameMap;
   onBack: () => void;
 }
 
-// Simple QR code using external API with fallback
-function QRCodeDisplay({ url, size = 220 }: { url: string; size?: number }) {
-  const [error, setError] = useState(false);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}&margin=10`;
-
-  if (error) {
-    return (
-      <div className="bg-slate-800 rounded-xl p-8 flex flex-col items-center justify-center" style={{ width: size, height: size }}>
-        <QrCode size={48} className="text-slate-600 mb-2" />
-        <p className="text-xs text-slate-500 text-center">QR 碼載入失敗<br />請使用連結分享</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white p-3 rounded-xl inline-block shadow-xl">
-      <img
-        src={qrUrl}
-        alt="QR Code"
-        width={size}
-        height={size}
-        onError={() => setError(true)}
-        className="block"
-      />
-    </div>
-  );
-}
+// Local QR generation (no external API — works offline)
 
 export default function LeaderExportScreen({ map, onBack }: Props) {
   const [encodedData, setEncodedData] = useState('');
@@ -169,7 +144,7 @@ button{background:#00F0FF;color:#0A0E1A;border:none;padding:12px 24px;border-rad
             className="text-center space-y-4"
           >
             <div className="flex justify-center">
-              <QRCodeDisplay url={joinUrl} size={220} />
+              <QRCodeImage value={joinUrl} size={220} />
             </div>
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
               <p className="text-sm text-emerald-400 font-medium">💡 讓成員掃描此 QR 碼</p>

@@ -9,16 +9,18 @@ import GlowButton from '../components/GlowButton';
 
 interface Props {
   onBack: () => void;
-  onJoinSession: (code: string, map: GameMap) => void;
+  onJoinSession: (code: string, map: GameMap, name?: string) => void;
   onOpenImport: () => void;
   /** Personal auto-start mode: join + start after countdown (fairest timing) */
   onAutoStart?: (map: GameMap, code: string, delaySec: number, name?: string) => void;
   initialCode?: string;
   /** Map already imported from the link (App consumes the URL before this screen mounts) */
   initialMap?: GameMap | null;
+  /** Pre-fill the player name from settings so it doesn't default to 尋寶者 */
+  initialPlayerName?: string;
 }
 
-export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, onAutoStart, initialCode, initialMap }: Props) {
+export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, onAutoStart, initialCode, initialMap, initialPlayerName }: Props) {
   const [roomCode, setRoomCode] = useState(initialCode || '');
   const [importCode, setImportCode] = useState('');
   const [error, setError] = useState('');
@@ -31,7 +33,7 @@ export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, 
     return !isNaN(v) && v > 0 ? v : 0;
   });
   const [autoCancelled, setAutoCancelled] = useState(false);
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(initialPlayerName || '');
 
   // Check URL for import data
   useEffect(() => {
@@ -131,7 +133,7 @@ export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, 
       return;
     }
     playSound('success');
-    onJoinSession(code, activeMap);
+    onJoinSession(code, activeMap, playerName.trim() || undefined);
   };
 
   const step = activeMap ? 'ready' : (roomCode.length >= 4 ? 'import' : 'code');
@@ -229,10 +231,34 @@ export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, 
           </motion.div>
         )}
 
+        {/* Player Name (leaderboard / verification) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-slate-800/50 rounded-2xl p-5 border border-slate-700"
+        >
+          <label className="text-sm text-slate-400 mb-3 flex items-center gap-2">
+            <User size={16} className="text-violet-400" />
+            你的名字（排行榜顯示用）
+          </label>
+          <input
+            type="text"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            maxLength={15}
+            placeholder={initialPlayerName ? `已預設為「${initialPlayerName}」` : '不輸入則為「尋寶者」'}
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500 text-sm"
+          />
+          <p className="text-[11px] text-slate-500 mt-2">
+            提示：先設定名字，領袖的成績榜與排行榜就不會出現一堆「尋寶者」。
+          </p>
+        </motion.div>
+
         {/* Room Code */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
           className="bg-slate-800/50 rounded-2xl p-5 border border-slate-700"
         >
           <label className="text-sm text-slate-400 mb-3 flex items-center gap-2">

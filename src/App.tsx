@@ -637,7 +637,23 @@ function App() {
     if (selectedRole === 'leader') {
       setView('leader-home');
     } else {
-      const savedMap = await loadActiveMap();
+      const [savedMap, savedSession] = await Promise.all([loadActiveMap(), loadActiveSession()]);
+      // Restore waiting-room context if an active (not yet finished) session exists,
+      // so leaving the waiting room via the back button no longer loses it.
+      if (savedSession && savedSession.status === 'waiting' && savedMap) {
+        setActiveMap(savedMap);
+        setSession(savedSession);
+        setView('member-waiting');
+        if (gpsPermission !== 'granted') setShowGPSModal(true);
+        return;
+      }
+      if (savedSession && savedSession.startTime && savedSession.startTime > Date.now() && savedMap) {
+        setActiveMap(savedMap);
+        setSession(savedSession);
+        setView('member-waiting');
+        if (gpsPermission !== 'granted') setShowGPSModal(true);
+        return;
+      }
       if (savedMap) {
         setActiveMap(savedMap);
         setView('member-radar');
@@ -760,8 +776,16 @@ function App() {
     await startCountdown(startTime, map, newSession);
   };
 
-  // Join session by code (member)
-  const handleJoinSession = async (code: string, map: GameMap) => {
+  // Join session by code (member). Optionally updates the player name first
+  // (members can set it on the join screen so the leaderboard isn't full of
+  // generic "尋寶者" entries).
+  const handleJoinSession = async (code: string, map: GameMap, name?: string) => {
+    if (name && name.trim()) {
+      const trimmed = name.trim().slice(0, 15);
+      const existing = await loadSettings();
+      await saveSettings({ ...existing, playerName: trimmed });
+      setSettings({ ...existing, playerName: trimmed });
+    }
     await saveActiveMap(map);
     setActiveMap(map);
     await saveFoundCheckpoints(map.id, []);
@@ -769,7 +793,7 @@ function App() {
 
     const newPlayer: SessionPlayer = {
       id: playerId,
-      name: settings.playerName || '尋寶者',
+      name: (name && name.trim()) ? name.trim().slice(0, 15) : (settings.playerName || '尋寶者'),
       joinedAt: Date.now(),
       ready: false,
       finishedAt: null,
@@ -970,6 +994,7 @@ function App() {
             onAutoStart={handleAutoStartSession}
             initialCode={sessionStorage.getItem('pendingJoinCode') || ''}
             initialMap={activeMap}
+            initialPlayerName={settings.playerName}
           />
         ) : view === 'member-waiting' && session && activeMap ? (
           <MemberWaitingScreen

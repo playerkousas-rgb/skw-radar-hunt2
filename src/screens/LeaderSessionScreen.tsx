@@ -12,6 +12,7 @@ import {
 import { loadAllResults, addPlayerResult, addLeaderboardEntry } from '../lib/storage';
 import { PlayerResult } from '../lib/types';
 import GlowButton from '../components/GlowButton';
+import QRCodeImage from '../components/QRCodeImage';
 
 interface Props {
   session: GameSession;
@@ -81,10 +82,6 @@ export default function LeaderSessionScreen({ session, map, onBack, onStartGame,
     }))));
     return `${window.location.origin}${window.location.pathname}?import=${encodeURIComponent(importData)}&join=${session.code}${autoMode ? `&auto=${autoDelay}` : ''}`;
   }, [map, session.code, autoMode, autoDelay]);
-
-  const qrUrl = useMemo(() => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(joinUrl)}`;
-  }, [joinUrl]);
 
   const handleStart = async () => {
     const url = await onStartGame(delaySec);
@@ -232,9 +229,7 @@ export default function LeaderSessionScreen({ session, map, onBack, onStartGame,
               </button>
             </div>
             <div className="flex flex-col items-center">
-              <div className="bg-white rounded-xl p-3">
-                <img src={qrUrl} alt="QR Code" className="w-48 h-48" />
-              </div>
+              <QRCodeImage value={joinUrl} size={192} />
               <p className="text-xs text-slate-500 mt-3 text-center">
                 參加者掃描此 QR 碼即可自動匯入地圖並輸入房間代碼
               </p>
@@ -415,13 +410,7 @@ export default function LeaderSessionScreen({ session, map, onBack, onStartGame,
               </button>
               {showStartQR && (
                 <div className="flex flex-col items-center py-2">
-                  <div className="bg-white rounded-xl p-3">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(startUrl)}`}
-                      alt="Start QR Code"
-                      className="w-48 h-48"
-                    />
-                  </div>
+                  <QRCodeImage value={startUrl} size={192} />
                   <p className="text-xs text-slate-500 mt-2 text-center">
                     讓還沒開始的成員掃描，點擊後自動同步倒數
                   </p>

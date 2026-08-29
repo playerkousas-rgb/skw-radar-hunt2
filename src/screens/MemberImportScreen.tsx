@@ -5,7 +5,7 @@ import {
   Trash2, FileText
 } from 'lucide-react';
 import { GameMap } from '../lib/types';
-import { decodeMapFromExport, generateId, playSound } from '../lib/utils';
+import { decodeMapFromExport, generateId, playSound, mapChecksum } from '../lib/utils';
 import { saveActiveMap, loadActiveMap } from '../lib/storage';
 import GlowButton from '../components/GlowButton';
 
@@ -67,8 +67,15 @@ export default function MemberImportScreen({ onBack, onMapImported, initialImpor
       return;
     }
 
-    // Ensure unique ID
-    map.id = generateId();
+    // Preserve the same map id when re-importing an identical map (same
+    // coordinates), so found-checkpoint progress isn't lost on refresh / re-import.
+    // Mirrors App.initApp's URL-import behaviour. Only assign a fresh id for new maps.
+    const active = await loadActiveMap();
+    if (active && mapChecksum(active) === mapChecksum(map)) {
+      map.id = active.id;
+    } else {
+      map.id = generateId();
+    }
     map.createdAt = Date.now();
 
     await saveActiveMap(map);
