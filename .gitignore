@@ -4,6 +4,29 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
+build/
+out/
+coverage/
+.vite/
+
+# Backups / temp files (dev leftovers)
+*.bak
+*.bak.*
+*.tmp
+*.temp
+*.old
+*.orig
+
+# Test uploads / runtime data
+uploads/
+upload/
+tmp/
+temp/
+test-results/
+playwright-report/
+
+# Deploy tooling local state (do NOT ignore .vercelignore)
+.vercel/
 
 # Logs
 *.log

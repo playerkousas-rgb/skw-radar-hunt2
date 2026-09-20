@@ -149,9 +149,6 @@ src/
 │   ├── LeaderboardScreen.tsx
 │   ├── AchievementsScreen.tsx
 │   ├── HistoryScreen.tsx
-│   ├── ListScreen.tsx
-│   ├── MapScreen.tsx
-│   ├── DashboardScreen.tsx
 │   └── SettingsScreen.tsx
 └── lib/
     ├── types.ts           # TypeScript 型別
@@ -164,9 +161,10 @@ src/
 
 - **React 19** + **TypeScript**
 - **Vite**（快速建置）
-- **Tailwind CSS v4**
+- **Tailwind CSS v4**（build 階段工具，歸類 devDependencies）
 - **Framer Motion**（流暢動畫）
-- **Leaflet**（互動地圖）
+- **Leaflet**（互動地圖 — 經由 CDN 於 iframe 內載入，**未安裝 npm 套件**，保持依賴極簡）
+- **qrcode**（本地產生 QR Code，離線可用）
 - **Lucide React**（圖示）
 - PWA 支援（manifest、主題色、加到主畫面）
 
@@ -201,6 +199,80 @@ src/
 - **📍顯示選項**（v2.5）：可關閉「自身位置顯示」（地圖改以寶藏中心定位）與「目標在附近提示」（無提示音/通知），支援硬core玩法。
 
 > 註：本遊戲定位為一次性活動，累計型成就（大師獵人/創作者）已移除解鎖邏輯，僅保留單場成就。
+
+## 📦 專案瘦身與防增肥規範（改版必讀，2026-09-20 起生效）
+
+> ⚠️ **每次改版／新增功能前，請重讀本節。** 本專案部署於 Vercel 免費方案，儲存配額有限；
+> 過去已累積不少死重（未使用畫面、Template 殘留檔、未壓縮圖示、錯置的依賴）。
+> 為避免再次爆滿，以下規範為**常駐約束**，任何 PR / 改版都必須遵守。
+
+### 1. 絕對不准進倉庫 / 不准上傳部署的東西
+
+| 禁止項目 | 說明 | 由誰把關 |
+|---|---|---|
+| `node_modules/` | 部署時 Vercel 會自行 `npm ci`，永遠不需上傳 | `.vercelignore` + `.gitignore` |
+| `dist/`、`build/`、`out/`、`coverage/` | 建置產物，部署時由 Vercel 現場建置 | `.vercelignore` + `.gitignore` |
+| `*.bak`、`*.tmp`、`*.old`、`*.orig`、`*.log` | 開發殘留備份檔，**請直接刪除，不要留倉庫** | `.vercelignore` + `.gitignore` |
+| `uploads/`、`tmp/`、`test-results/` 等 | 測試上傳／執行期資料 | `.vercelignore` + `.gitignore` |
+| `.env`、`.env.*` | 機密；正式環境改在 Vercel Dashboard 設定 | `.vercelignore` + `.gitignore` |
+| 截圖、設計原稿、示意圖 | 一律放外部空間或 issue 附件，**不進 repo** | 人工檢查 |
+
+### 2. 依賴紀律（dependencies vs devDependencies）
+
+- **`dependencies` 只放「被打進生產 bundle 的執行期套件」**。現有名單（勿隨意擴充）：
+  `react`、`react-dom`、`framer-motion`、`lucide-react`、`qrcode`。
+- **`devDependencies` 放所有建置工具**：`vite`、`@vitejs/plugin-react`、`tailwindcss`、
+  `@tailwindcss/vite`、`typescript`、`eslint` 系列與所有 `@types/*`。
+- **新增套件前三問**：
+  1. 三行內自己寫得出來嗎？（寫得出來就不要裝）
+  2. CDN / 瀏覽器原生 API 做得到嗎？（參考 Leaflet：以 CDN 於 iframe 載入，零 npm 依賴）
+  3. 真的要裝 → 是 build 工具嗎？（是 → `devDependencies`；裝完跑 `npm ls <pkg>` 確認沒有被動引入肥巨獸）
+- **嚴禁**為了「以後可能用到」預先安裝套件。
+
+### 3. 靜態資源（`public/`）紀律
+
+- 新增圖檔前：**先壓縮再進倉庫**。PNG 一律 `-strip` + 適度降色（本次三顆 PWA 圖示以 PNG-256 壓掉 **63%** 容量，畫面零差異）；優先考慮 SVG。
+- **引用原則：任何進 `public/` 的檔案必須被 `index.html`、`manifest.json` 或程式碼引用**。
+  未引用 = 死重，逕行刪除。改版時用下面指令掃一次孤兒檔：
+  ```bash
+  # 列出 public/ 內沒有被任何原始碼引用的檔案
+  for f in public/*; do grep -rq "$(basename "$f")" index.html src --include='*' || echo "孤兒檔: $f"; done
+  ```
+- PWA 圖示的**尺寸規格不可為了瘦身而縮小**（512/192/180 為 manifest 與 iOS 所需）。
+
+### 4. 死碼（Dead Code）清掃義務
+
+- 刪功能時，畫面／元件要**連根拔除**（檔案 + 路由 + 型別），不可「先註解留著」。
+  （教訓：`DashboardScreen` / `ListScreen` / `MapScreen` 三個孤兒畫面曾占 ~4.6 KB 原始碼）
+- 改版後至少跑一次：
+  ```bash
+  npm run check   # tsc -b，會抓出幽靈 import
+  npm run lint    # eslint，會抓未使用變數/匯入
+  npm run build   # 生產打包必須零錯誤
+  ```
+
+### 5. Vercel 部署紅線
+
+- `.vercelignore` 為部署瘦身核心，**修改任何 exclude 規則前必須想清楚**；不得整檔刪除。
+- `vercel.json` 固定：`framework: vite`、`outputDirectory: dist`、`installCommand: npm ci`、
+  `buildCommand: npm run build` — 只上傳原始碼、只部署 `dist/`。
+- **新增 `/public` 大檔或新輸出目錄時，記得同步檢查 `.vercelignore` 是否涵蓋。**
+
+### 6. 瘦身維運指令速查
+
+```bash
+# 看目前最大檔 Top 20（排除 .git / node_modules）
+du -ah --exclude=.git --exclude=node_modules . | sort -rh | head -20
+
+# 孤兒靜態檔掃描（見第 3 點）
+# 建置驗證
+npm run check && npm run lint && npm run build
+```
+
+> 📌 **2026-09-20 瘦身紀錄**：刪除 3 個孤兒畫面 + 2 個 Template 殘留檔（`vite.svg`、`react.svg`）、
+> 移除 4 個未使用依賴（`leaflet`、`react-leaflet`、`react-router-dom`、`@tailwindcss/vite` 移至 dev）、
+> PWA 圖示壓縮 -63%。原始碼樹 1.2 MB → 0.7 MB（不含 `node_modules`）。
+> 詳細清單見該次 commit 訊息。
 
 ## 📜 授權
 
