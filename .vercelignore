@@ -1,0 +1,69 @@
+# ============================================================
+# .vercelignore — 控制部署上傳內容，防止 Vercel 專案配額爆滿
+# 原則：只上傳「建置所需的原始碼」，其餘一律排除。
+# （Vercel 會自行在伺服端執行 npm install，node_modules 不需上傳）
+# ============================================================
+
+# --- 版控與 CI ---
+.git
+.github
+.gitignore
+
+# --- 依賴與快取（伺服端會重新安裝）---
+node_modules
+**/node_modules
+
+# --- 建置輸出（Vercel 會自行建置產生）---
+dist
+dist-ssr
+.vite
+**/.vite
+build
+out
+coverage
+
+# --- 備份 / 暫存 / 日誌（開發殘留物）---
+*.bak
+*.bak.*
+*.tmp
+*.temp
+*.old
+*.orig
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs
+
+# --- 測試上傳 / 使用者資料夾 ---
+uploads
+upload
+tmp
+temp
+.sandbox
+
+# --- 測試與除殘檔案 ---
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+cypress
+playwright-report
+test-results
+
+# --- 環境變數（勿上傳，改於 Vercel Dashboard 設定）---
+.env
+.env.*
+!.env.example
+
+# --- OS / 編輯器 ---
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# --- 文件（不影響建置產物）---
+*.md
+!README.md
+LICENSE
