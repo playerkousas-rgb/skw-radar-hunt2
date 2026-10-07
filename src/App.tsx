@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { RoleType, ViewType, GameMap, GameSession, SessionPlayer, PlayerResult, UserSettings } from './lib/types';
 import {
   loadRole, saveRole, loadActiveMap, saveActiveMap,
@@ -1065,6 +1066,7 @@ function App() {
           />
         )
       )}
+      <Analytics />
     </>
   );
 }
