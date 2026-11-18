@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Users, Clock, MapPin, Signal, Radio, Play,
+  ArrowLeft, Users, MapPin, Signal, Radio, Play,
   CheckCircle2, KeyRound, QrCode, RefreshCw
 } from 'lucide-react';
 import { GameSession, GameMap } from '../lib/types';
@@ -20,9 +20,8 @@ interface Props {
 }
 
 export default function MemberWaitingScreen({
-  session, map, playerName, currentLocation, gpsAccuracy, onBack, onStartNow
+  session, map, playerName, gpsAccuracy, onBack, onStartNow
 }: Props) {
-  const [countdown, setCountdown] = useState<number | null>(null);
   const [timeUntilStart, setTimeUntilStart] = useState<number | null>(null);
   const [showStartInput, setShowStartInput] = useState(false);
   const [startCode, setStartCode] = useState('');

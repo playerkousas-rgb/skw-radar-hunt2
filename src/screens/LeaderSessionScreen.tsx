@@ -52,21 +52,16 @@ export default function LeaderSessionScreen({ session, map, onBack, onStartGame,
 
   // Countdown when starting
   useEffect(() => {
-    if (session.status !== 'starting' || !session.startTime) {
-      setCountdown(null);
-      return;
-    }
+    const startTime = session.startTime;
+    if (session.status !== 'starting' || !startTime) return;
+    let frame: number;
     const tick = () => {
-      const remaining = session.startTime! - Date.now();
-      if (remaining <= 0) {
-        setCountdown(0);
-      } else {
-        setCountdown(Math.ceil(remaining / 1000));
-        requestAnimationFrame(tick);
-      }
+      const remaining = startTime - Date.now();
+      setCountdown(Math.max(0, Math.ceil(remaining / 1000)));
+      if (remaining > 0) frame = requestAnimationFrame(tick);
     };
-    const id = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(id);
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
   }, [session.status, session.startTime]);
 
   const joinUrl = useMemo(() => {
@@ -359,7 +354,7 @@ export default function LeaderSessionScreen({ session, map, onBack, onStartGame,
             >
               <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-2">
                 <Timer size={16} />
-                {countdown && countdown > 0 ? `倒數 ${countdown} 秒...` : '遊戲已開始！'}
+                {session.status === 'starting' && countdown && countdown > 0 ? `倒數 ${countdown} 秒...` : '遊戲已開始！'}
               </h3>
               <p className="text-xs text-emerald-200/80">
                 分享此連結給尚未開始的參加者，點擊後將自動同步倒數：

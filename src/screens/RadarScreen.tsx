@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Map as MapIcon, Volume2, VolumeX, Target,
-  MoreVertical, Trophy, Clock, Navigation as NavIcon, Signal, Flag, CheckCircle,
+  MoreVertical, Trophy, Clock, Navigation as NavIcon, Signal, Flag,
   BookOpen, HelpCircle
 } from 'lucide-react';
 import { saveFoundCheckpoints, saveActiveMap } from '../lib/storage';
@@ -28,12 +28,12 @@ interface Props {
   gpsEnabled: boolean;
   session?: GameSession | null;
   startTime?: number;
-  onClearProgress?: () => void;
+  onClearProgress: () => Promise<void>;
   onFinishHunt?: () => void;
 }
 
 export default function RadarScreen({
-  map, currentLocation, foundCheckpoints, onBack, onChangeView,
+  map, currentLocation, foundCheckpoints: localFound, onBack, onChangeView,
   gpsEnabled, session, startTime: startTimeProp, onClearProgress, onFinishHunt
 }: Props) {
   const [detailCP, setDetailCP] = useState<Checkpoint | null>(null);
@@ -44,7 +44,6 @@ export default function RadarScreen({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showMap, setShowMap] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [localFound, setLocalFound] = useState<string[]>(foundCheckpoints);
   const [foundPopup, setFoundPopup] = useState<Checkpoint | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
@@ -58,7 +57,7 @@ export default function RadarScreen({
   const showUserLocation = map.showUserLocation !== false;
   const nearbyHints = map.nearbyHints !== false;
   const lastNearbyAlert = useRef<number>(0);
-  const lastFoundRef = useRef<Set<string>>(new Set(foundCheckpoints));
+  const lastFoundRef = useRef<Set<string>>(new Set(localFound));
 
   // Determine start time (from session or prop) — frozen on mount so the
   // elapsed timer doesn't reset on every re-render
@@ -66,22 +65,20 @@ export default function RadarScreen({
     startTimeProp || (session?.startTime && session.startTime < Date.now() + 60000 ? session.startTime : Date.now())
   );
 
-  // Sync with props & detect new found checkpoints
+  // Detect new finds without duplicating App's checkpoint state.
   useEffect(() => {
     const prevSet = lastFoundRef.current;
-    for (const id of foundCheckpoints) {
-      if (!prevSet.has(id)) {
-        const cp = map.checkpoints.find(c => c.id === id);
-        if (cp) {
-          setFoundPopup(cp);
-          playSound('found');
-          vibrateDevice([100, 50, 100, 50, 200]);
-        }
-        prevSet.add(id);
-      }
-    }
-    setLocalFound(foundCheckpoints);
-  }, [foundCheckpoints, map.checkpoints]);
+    const latest = localFound.filter(id => !prevSet.has(id)).at(-1);
+    lastFoundRef.current = new Set(localFound);
+    const checkpoint = map.checkpoints.find(cp => cp.id === latest);
+    if (!checkpoint) return;
+    const frame = requestAnimationFrame(() => {
+      setFoundPopup(checkpoint);
+      playSound('found');
+      vibrateDevice([100, 50, 100, 50, 200]);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [localFound, map.checkpoints]);
 
   // Live timer (stopwatch)
   useEffect(() => {
@@ -171,15 +168,8 @@ export default function RadarScreen({
 
   const handleClearProgress = async () => {
     if (!confirm('確定要清除所有尋寶進度嗎？這將重置你已找到的所有寶藏。')) return;
-    if (onClearProgress) {
-      // Let App clear storage + state together, otherwise the props sync
-      // effect would immediately restore the old progress
-      await onClearProgress();
-    } else {
-      await saveFoundCheckpoints(map.id, []);
-    }
-    setLocalFound([]);
-    lastFoundRef.current = new Set();
+    await onClearProgress();
+    setFoundPopup(null);
     setShowMenu(false);
     playSound('click');
   };

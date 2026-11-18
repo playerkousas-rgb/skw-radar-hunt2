@@ -1,6 +1,6 @@
 import { 
   GameMap, RoleType, TreasureHistory, UserStats, UserAchievement, 
-  ACHIEVEMENTS, LeaderboardEntry, UserSettings, GameSession, SessionPlayer, PlayerResult
+  ACHIEVEMENTS, LeaderboardEntry, UserSettings, GameSession, PlayerResult
 } from './types';
 
 const MAPS_KEY = 'treasure_maps';

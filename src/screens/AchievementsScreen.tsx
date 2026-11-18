@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Trophy, Lock, Star, Share2 } from 'lucide-react';
 import { UserAchievement } from '../lib/types';
-import { loadAchievements, unlockAchievement } from '../lib/storage';
+import { loadAchievements } from '../lib/storage';
 import { ViewType } from '../lib/types';
 
 interface Props {
@@ -15,14 +15,14 @@ export default function AchievementsScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAchievementsData();
+    let active = true;
+    loadAchievements().then((data) => {
+      if (!active) return;
+      setAchievements(data);
+      setLoading(false);
+    });
+    return () => { active = false; };
   }, []);
-
-  const loadAchievementsData = async () => {
-    const data = await loadAchievements();
-    setAchievements(data);
-    setLoading(false);
-  };
 
   const unlockedCount = achievements.filter(a => a.unlockedAt).length;
   const totalCount = achievements.length;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trophy, Medal, Clock, Navigation, Share2, Filter } from 'lucide-react';
+import { ArrowLeft, Trophy, Clock, Navigation, Share2 } from 'lucide-react';
 import { LeaderboardEntry } from '../lib/types';
 import { loadLeaderboard, loadActiveMap, loadSettings } from '../lib/storage';
 import { formatTime, formatDistance, getRankBadge } from '../lib/utils';
@@ -12,22 +12,20 @@ interface Props {
 export default function LeaderboardScreen({ onBack }: Props) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [filter, setFilter] = useState<'all' | 'current'>('all');
-  const [currentMapId, setCurrentMapId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadedFilter, setLoadedFilter] = useState<typeof filter | null>(null);
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    const loadData = async () => {
+      const activeMap = await loadActiveMap();
+      const allEntries = await loadLeaderboard(filter === 'current' ? activeMap?.id : undefined);
+      if (!active) return;
+      setEntries(allEntries.slice(0, 50)); // Top 50
+      setLoadedFilter(filter);
+    };
+    void loadData();
+    return () => { active = false; };
   }, [filter]);
-
-  const loadData = async () => {
-    setLoading(true);
-    const activeMap = await loadActiveMap();
-    setCurrentMapId(activeMap?.id || null);
-
-    const allEntries = await loadLeaderboard(filter === 'current' ? activeMap?.id : undefined);
-    setEntries(allEntries.slice(0, 50)); // Top 50
-    setLoading(false);
-  };
 
   const handleShare = async () => {
     // Find this player's best rank using their saved player name
@@ -42,7 +40,7 @@ export default function LeaderboardScreen({ onBack }: Props) {
     }
   };
 
-  if (loading) {
+  if (loadedFilter !== filter) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />

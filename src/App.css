@@ -231,3 +231,68 @@ body {
 body {
   overscroll-behavior-y: contain;
 }
+
+/* Shared top bar stays in normal flow; it never overlays a hunt or its controls. */
+.app-frame,
+.app-view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-frame {
+  min-height: 100%;
+}
+
+.app-view {
+  position: relative;
+  flex: 1;
+}
+
+.app-view > .min-h-screen {
+  flex: 1;
+  min-height: 0;
+}
+
+.store-topbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: max(4px, var(--sat)) max(12px, var(--sar)) 4px max(12px, var(--sal));
+  background: #0a0e1a;
+  border-bottom: 1px solid #1e293b;
+}
+
+.support-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  color: #cbd5e1;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.support-btn:hover {
+  color: #e2e8f0;
+  border-color: #64748b;
+}
+
+.support-btn:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 2px;
+}
+
+.store-topbar[hidden],
+.support-btn[hidden] {
+  display: none;
+}
+
+@media print {
+  .store-topbar, .support-btn { display: none; }
+}

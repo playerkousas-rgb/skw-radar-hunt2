@@ -16,7 +16,6 @@ interface Props {
 
 export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, playerName, onShowHelp, onMockDemo }: Props) {
   const [name, setName] = useState(playerName || '');
-  const [editingName, setEditingName] = useState(!playerName || playerName === '尋寶者');
   const [showDemoModal, setShowDemoModal] = useState(false);
 
   const handleSaveName = async () => {
@@ -101,7 +100,6 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, 
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onFocus={() => setEditingName(true)}
                 placeholder="輸入你的名稱"
                 maxLength={15}
                 className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
@@ -114,7 +112,7 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, 
         <div className="space-y-3">
           {/* Leader */}
           <motion.div
-            initial={{ opacity: 0, x: -30 }}
+            initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
             className={`group ${currentRole === 'leader' ? 'ring-2 ring-cyan-400 rounded-2xl' : ''}`}
@@ -150,7 +148,7 @@ export default function RoleSelectScreen({ onSelectRole, currentRole, onLogout, 
 
           {/* Member */}
           <motion.div
-            initial={{ opacity: 0, x: 30 }}
+            initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.4 }}
             className={`group ${currentRole === 'member' ? 'ring-2 ring-violet-400 rounded-2xl' : ''}`}

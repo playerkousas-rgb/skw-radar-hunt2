@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Copy, Check, Share2, QrCode, Download,
@@ -16,19 +16,12 @@ interface Props {
 // Local QR generation (no external API — works offline)
 
 export default function LeaderExportScreen({ map, onBack }: Props) {
-  const [encodedData, setEncodedData] = useState('');
   const [copied, setCopied] = useState<'code' | 'url' | null>(null);
   const [activeTab, setActiveTab] = useState<'code' | 'qr'>('qr');
-  const [shareUrl, setShareUrl] = useState('');
-  const [joinUrl, setJoinUrl] = useState('');
-
-  useEffect(() => {
-    const encoded = encodeMapForExport(map);
-    setEncodedData(encoded);
-    const baseUrl = `${window.location.origin}${window.location.pathname}`;
-    setShareUrl(`${baseUrl}?import=${encodeURIComponent(encoded)}`);
-    setJoinUrl(`${baseUrl}?import=${encodeURIComponent(encoded)}&join=AUTO`);
-  }, [map]);
+  const encodedData = useMemo(() => encodeMapForExport(map), [map]);
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
+  const shareUrl = `${baseUrl}?import=${encodeURIComponent(encodedData)}`;
+  const joinUrl = `${shareUrl}&join=AUTO`;
 
   const handleCopy = async (text: string, type: 'code' | 'url') => {
     const success = await copyToClipboard(text);

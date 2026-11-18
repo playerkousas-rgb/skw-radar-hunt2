@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, HelpCircle, ChevronDown, ChevronUp, Crown, Compass,
-  MapPin, Users, Clock, Target, Trophy, Volume2, Vibrate, Map,
-  QrCode, Flag, BookOpen, Signal, Shield, Zap, Wifi, Smartphone,
-  CheckCircle2, AlertTriangle, Lightbulb, Share2, Lock,
-  Gamepad2, Timer, FlaskConical, Eye, BellOff
+  MapPin, Users, Clock, Target, Trophy,
+  QrCode, BookOpen, Shield, Zap,
+  CheckCircle2, AlertTriangle, Lightbulb,
+  Gamepad2, FlaskConical, Eye, BellOff
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { ViewType } from '../lib/types';
 import CopyrightFooter from '../components/CopyrightFooter';
 
@@ -17,7 +18,7 @@ interface Props {
 
 interface HelpSection {
   id: string;
-  icon: any;
+  icon: LucideIcon;
   title: string;
   color: string;
   bgColor: string;
@@ -281,7 +282,7 @@ export default function HelpScreen({ onBack }: Props) {
     {
       id: 'gameplay',
       icon: Gamepad2,
-      title: '玩法 × 計時 × 顯示選項（v2.4）',
+      title: '玩法 × 計時 × 顯示選項',
       color: 'text-orange-400',
       bgColor: 'bg-orange-500/10',
       content: [
@@ -560,7 +561,7 @@ export default function HelpScreen({ onBack }: Props) {
 
       {/* Footer */}
       <div className="border-t border-slate-800 p-6 text-center">
-        <p className="text-xs text-slate-500 mb-2">🎯 Radar Hunt v2.0 • GPS 真人尋寶</p>
+        <p className="text-xs text-slate-500 mb-2">🎯 Radar Hunt • GPS 真人尋寶</p>
         <CopyrightFooter />
       </div>
     </div>

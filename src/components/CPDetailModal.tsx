@@ -1,6 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Radio, Navigation, FileText, Lightbulb, Image as ImageIcon } from 'lucide-react';
-import { Colors } from '../lib/colors';
 import { Checkpoint } from '../lib/types';
 import { formatDistance, getCheckpointPoints } from '../lib/utils';
 

@@ -1,14 +1,15 @@
 {
-  "name": "placeholder-model-2",
+  "name": "skw-radar-hunt2",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "check": "tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preflight": "node scripts/preflight_v1.0.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
