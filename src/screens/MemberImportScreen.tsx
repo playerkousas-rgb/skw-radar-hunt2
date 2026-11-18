@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, QrCode, Keyboard, Check, AlertCircle, Download,
@@ -16,7 +16,11 @@ interface Props {
 }
 
 export default function MemberImportScreen({ onBack, onMapImported, initialImportCode }: Props) {
-  const [importCode, setImportCode] = useState('');
+  const [urlImport] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return { code: params.get('import'), joinCode: params.get('join') };
+  });
+  const [importCode, setImportCode] = useState(urlImport.code || initialImportCode || '');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [savedMaps, setSavedMaps] = useState<GameMap[]>([]);
@@ -24,29 +28,12 @@ export default function MemberImportScreen({ onBack, onMapImported, initialImpor
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    loadSavedMaps();
-
-    // Check URL for import
-    const params = new URLSearchParams(window.location.search);
-    const importData = params.get('import');
-    const joinCode = params.get('join');
-    if (importData) {
-      setImportCode(importData);
-      // Auto-import
-      setTimeout(() => handleImport(importData, joinCode || undefined), 500);
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (initialImportCode) {
-      setImportCode(initialImportCode);
-    }
-  }, [initialImportCode]);
-
-  const loadSavedMaps = async () => {
-    const active = await loadActiveMap();
-    if (active) {
-      setSavedMaps([active]);
-    }
-  };
+    let mounted = true;
+    loadActiveMap().then((map) => {
+      if (mounted && map) setSavedMaps([map]);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const handleImport = async (code?: string, joinCode?: string) => {
     setError('');
@@ -86,6 +73,17 @@ export default function MemberImportScreen({ onBack, onMapImported, initialImpor
       onMapImported(map, joinCode);
     }, 800);
   };
+
+  const autoImport = useEffectEvent((code: string, joinCode?: string) => {
+    window.history.replaceState({}, '', window.location.pathname);
+    void handleImport(code, joinCode);
+  });
+  useEffect(() => {
+    const { code, joinCode } = urlImport;
+    if (!code) return;
+    const timer = setTimeout(() => autoImport(code, joinCode || undefined), 500);
+    return () => clearTimeout(timer);
+  }, [urlImport]);
 
   const handleSubmit = () => {
     handleImport();

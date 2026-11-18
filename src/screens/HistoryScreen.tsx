@@ -15,14 +15,14 @@ export default function HistoryScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadHistoryData();
+    let active = true;
+    loadTreasureHistory().then((data) => {
+      if (!active) return;
+      setHistory(data);
+      setLoading(false);
+    });
+    return () => { active = false; };
   }, []);
-
-  const loadHistoryData = async () => {
-    const data = await loadTreasureHistory();
-    setHistory(data);
-    setLoading(false);
-  };
 
   const handleClearHistory = async () => {
     if (confirm('確定要清除所有歷史紀錄嗎？')) {

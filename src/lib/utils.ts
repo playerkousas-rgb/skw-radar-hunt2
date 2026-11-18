@@ -1,4 +1,4 @@
-import { Checkpoint, GameMap, LeaderboardEntry, UserSettings, PlayerResult } from './types';
+import { Checkpoint, GameMap, PlayerResult } from './types';
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
@@ -128,6 +128,21 @@ export function getDirectionLabel(angle: number): string {
 }
 
 // Compact encode/decode for export
+interface CompactCheckpoint {
+  i?: string;
+  a: number;
+  o: number;
+  e?: string;
+  l?: string;
+  x?: string;
+  u?: string;
+  r?: number;
+  h?: string;
+  t?: Checkpoint['type'];
+  w?: string;
+  s?: number;
+}
+
 export function encodeMapForExport(map: GameMap): string {
   const compact = {
     t: 'rh',
@@ -199,7 +214,7 @@ export function decodeMapFromExport(data: string): GameMap | null {
         createdAt: Date.now(),
         centerLat: parsed.p?.[0]?.a || 0,
         centerLng: parsed.p?.[0]?.o || 0,
-        checkpoints: (parsed.p || []).map((p: any, idx: number) => ({
+        checkpoints: (parsed.p || []).map((p: CompactCheckpoint, idx: number) => ({
           id: p.i || generateId(),
           latitude: p.a,
           longitude: p.o,
@@ -242,7 +257,7 @@ export function vibrateDevice(pattern: number | number[] = 50): void {
 }
 
 export function playSound(type: 'found' | 'nearby' | 'success' | 'alert' | 'click' = 'found'): void {
-  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+  const AudioContext = window.AudioContext || (window as Window & { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext;
   if (!AudioContext) return;
   
   const ctx = new AudioContext();

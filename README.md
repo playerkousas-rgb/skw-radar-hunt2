@@ -1,4 +1,4 @@
-# 🎯 Radar Hunt v2.0 - GPS 真人尋寶雷達
+# 🎯 Radar Hunt v2.6.0 - GPS 真人尋寶雷達
 
 一個手機優先的 Progressive Web App (PWA)，讓領袖可以建立尋寶地圖、開房間，邀請多位玩家同步出發，使用 GPS 雷達找寶藏，最後繳交驗證碼統計成績。
 
@@ -249,6 +249,7 @@ src/
   npm run check   # tsc -b，會抓出幽靈 import
   npm run lint    # eslint，會抓未使用變數/匯入
   npm run build   # 生產打包必須零錯誤
+  npm run preflight # 驗入口版號、lint、build、dist 資產同 manifest
   ```
 
 ### 5. Vercel 部署紅線
@@ -273,6 +274,20 @@ npm run check && npm run lint && npm run build
 > 移除 4 個未使用依賴（`leaflet`、`react-leaflet`、`react-router-dom`、`@tailwindcss/vite` 移至 dev）、
 > PWA 圖示壓縮 -63%。原始碼樹 1.2 MB → 0.7 MB（不含 `node_modules`）。
 > 詳細清單見該次 commit 訊息。
+
+## 發佈版號
+
+- 版本化入口源檔：`entry/radar-hunt_v2.6.0.html`。Vite 同正式網址保留固定 `index.html`／`/`，而 `manifest.json` 路徑同 `start_url` 維持不變。
+- 修改入口需修改對應版本嘅源檔，再 `cp entry/radar-hunt_v2.6.0.html index.html` 同步；兩份必須完全相同。升版同時更新入口檔名、meta、標題、`package.json`／lockfile 同本 README。畫面用 `src/lib/version.ts` 從 `package.json` 讀取嘅 `APP_VERSION`。
+- `npm run preflight` 會驗同步同 `dist/` 資產。唔提交 `dist/`，Vercel 照 `vercel.json` 重建。
+
+## 準入白名單（SG18／SG19）
+
+- `appKey: 'skw-radar-hunt2'`、`mode: 'entry-gate'`、`portalIds: ['appstore']`、`silentPortalIds: ['library']`、`allowStandalone: true`、`autoRedirectSeconds: 0`。`supportNudge` 同閘門統計都冇開。
+- 請先由 SCOUT APP STORE 或通告圖書館入到 App，再用瀏覽器選單「加入主畫面」。新分頁直打網址、開舊房間 QR 或同步開始連結（冇合資格來源）會撞提示卡；持有同分頁通行證或由已裝主畫面開啟仍會放行。
+- `public/store_gate_v1.0.js` 係[真理倉原檔](https://github.com/playerkousas-rgb/readme/blob/4c63ac3096bf87fcff760b45b34adab14b1b2576/templates/vercel/store_gate_v1.0.js)，由 Vite 原樣帶到 `dist/store_gate_v1.0.js`。SG18 頂欄掣用 `ScoutStoreGate.getAppStoreUrl('skw-radar-hunt2')`；slug 按[主站 seed 嘅正式 host](https://github.com/playerkousas-rgb/website/blob/4d2e4dd2b5bc2c42987f261117755243edf88b01/migrations/20261116-app-slug-seed.sql#L70)核對，唔會直連主站資料庫。掣跟現有語言偏好切換；唔代表全 App 已翻譯。
+- 保留現有房間、成績、分享／QR 格式及儲存 key；唔為舊 QR 開例外，唔新增備份功能。閘門唯一新增嘅儲存係範本嘅分頁通行證 `skw-radar-hunt2.store_pass`（`sessionStorage`）。
+- 呢個係前端導流閘，唔係後端權限驗證。由能保留 `Referer` 嘅入口連結先入到；外部 WebView 或瀏覽器私隱設定可能會剝走 `Referer`。
 
 ## 📜 授權
 

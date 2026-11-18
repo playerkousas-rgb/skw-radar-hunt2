@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Trophy, Clock, Navigation, Flag, Copy, Check,
-  Share2, Home, RotateCcw, Star, Zap
+  Share2, Home, RotateCcw, Zap
 } from 'lucide-react';
 import { PlayerResult, GameSession } from '../lib/types';
 import { formatTime, formatDistance, copyToClipboard, playSound, encodeResult } from '../lib/utils';

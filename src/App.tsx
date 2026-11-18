@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useEffectEvent, useRef, useCallback } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { RoleType, ViewType, GameMap, GameSession, SessionPlayer, PlayerResult, UserSettings } from './lib/types';
 import {
@@ -36,6 +36,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import HelpScreen from './screens/HelpScreen';
 import GPSPermissionModal from './components/GPSPermissionModal';
 import CountdownOverlay from './components/CountdownOverlay';
+import StoreSupportTop from './components/StoreSupportTop';
 
 import './App.css';
 
@@ -50,6 +51,7 @@ function App() {
   const [gpsPermission, setGpsPermission] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const [showGPSModal, setShowGPSModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [foundCheckpoints, setFoundCheckpoints] = useState<string[]>([]);
   const [settings, setSettings] = useState<UserSettings>({
     soundEnabled: true,
@@ -65,12 +67,17 @@ function App() {
 
   // Session state
   const [session, setSession] = useState<GameSession | null>(null);
-  const [playerId, setPlayerId] = useState<string>(generateId());
+  const [playerId] = useState(generateId);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [finalResult, setFinalResult] = useState<PlayerResult | null>(null);
 
   const watchId = useRef<number | null>(null);
-  const huntStartTime = useRef<number>(0);
+  const huntStartTime = useRef(0);
+  const [huntStartForView, setHuntStartForView] = useState(0);
+  const updateHuntStartTime = (time: number) => {
+    huntStartTime.current = time;
+    setHuntStartForView(time);
+  };
   const totalDistance = useRef<number>(0);
   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
   const gpsFilter = useRef(createGPSFilter());
@@ -155,7 +162,7 @@ function App() {
     setMockMode(true);
 
     const startTime = Date.now();
-    huntStartTime.current = startTime;
+    updateHuntStartTime(startTime);
     totalDistance.current = 0;
     lastPosition.current = null;
     gpsFilter.current = createGPSFilter();
@@ -185,14 +192,6 @@ function App() {
     return result;
   }, []);
 
-  useEffect(() => {
-    initApp();
-    return () => {
-      if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
-      if (mockInterval.current) clearInterval(mockInterval.current);
-    };
-  }, []);
-
   // Persist the personal-auto-start delay (seconds) from an `&auto=N` link param
   const stashAutoStart = (raw?: string) => {
     const sec = parseInt(raw || '');
@@ -201,20 +200,14 @@ function App() {
     }
   };
 
-  const initApp = async () => {
-    const [savedRole, savedMap, userSettings, savedSession] = await Promise.all([
-      loadRole(),
-      loadActiveMap(),
-      loadSettings(),
-      loadActiveSession(),
-    ]);
-
+  const initApp = useEffectEvent(async (
+    savedRole: RoleType, savedMap: GameMap | null, userSettings: UserSettings, savedSession: GameSession | null
+  ) => {
     setRole(savedRole);
     setSettings(userSettings);
 
     if (savedMap) setActiveMap(savedMap);
     if (savedSession) setSession(savedSession);
-    setLoading(false);
 
     const urlParams = parseURLParams();
 
@@ -359,27 +352,28 @@ function App() {
           // Active game in session
           if (savedMap) {
             setView('member-radar');
-            loadFoundCheckpoints(savedMap.id).then(setFoundCheckpoints);
+            setFoundCheckpoints(await loadFoundCheckpoints(savedMap.id));
             // Restore start time
-            huntStartTime.current = savedSession.startTime || Date.now();
+            updateHuntStartTime(savedSession.startTime || Date.now());
           } else {
             setView('member-import');
           }
         }
       } else if (savedMap) {
         setView('member-radar');
-        loadFoundCheckpoints(savedMap.id).then(setFoundCheckpoints);
+        setFoundCheckpoints(await loadFoundCheckpoints(savedMap.id));
       } else {
         setView('member-import');
       }
     }
 
-    checkGPSPermission();
-  };
+    // Don't request location on a fresh portal visit to the role picker.
+    if (savedRole === 'member') checkGPSPermission();
+  });
 
-  const startCountdown = async (startTime: number, map: GameMap, sess: GameSession) => {
+  async function startCountdown(startTime: number, map: GameMap, sess: GameSession) {
     const beginHunt = async () => {
-      huntStartTime.current = startTime;
+      updateHuntStartTime(startTime);
       totalDistance.current = 0;
       lastPosition.current = null;
       gpsFilter.current = createGPSFilter();
@@ -421,9 +415,9 @@ function App() {
       setTimeout(tick, 200);
     };
     setTimeout(tick, 100);
-  };
+  }
 
-  const checkGPSPermission = () => {
+  function checkGPSPermission() {
     if (!navigator.geolocation) {
       setGpsPermission('denied');
       setShowGPSModal(true);
@@ -443,7 +437,7 @@ function App() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
-  };
+  }
 
   const requestGPSPermission = async () => {
     try {
@@ -462,7 +456,7 @@ function App() {
     }
   };
 
-  const startTracking = () => {
+  function startTracking() {
     if (watchId.current) return;
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -495,7 +489,7 @@ function App() {
       () => { },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
-  };
+  }
 
   const checkCheckpointArrival = async (loc: { lat: number; lng: number; accuracy?: number }) => {
     if (!activeMap || gpsPermission !== 'granted') return;
@@ -524,8 +518,6 @@ function App() {
       }
     }
   };
-  // Keep the mock engine pointed at the latest arrival handler (after this definition)
-  checkArrivalRef.current = checkCheckpointArrival;
 
   const completeHunt = async (finalFound?: string[]) => {
     if (!activeMap) return;
@@ -631,6 +623,9 @@ function App() {
     setView('result');
   };
 
+  // Keep the demo engine pointed at the latest committed arrival handler.
+  useEffect(() => { checkArrivalRef.current = checkCheckpointArrival; });
+
   const handleSelectRole = async (selectedRole: Exclude<RoleType, null>) => {
     await saveRole(selectedRole);
     setRole(selectedRole);
@@ -658,7 +653,7 @@ function App() {
       if (savedMap) {
         setActiveMap(savedMap);
         setView('member-radar');
-        huntStartTime.current = Date.now();
+        updateHuntStartTime(Date.now());
         totalDistance.current = 0;
         loadFoundCheckpoints(savedMap.id).then(setFoundCheckpoints);
         if (gpsPermission !== 'granted') setShowGPSModal(true);
@@ -682,7 +677,7 @@ function App() {
     setSession(null);
     setFinalResult(null);
     setCountdown(null);
-    huntStartTime.current = 0;
+    updateHuntStartTime(0);
     totalDistance.current = 0;
     lastPosition.current = null;
   };
@@ -699,9 +694,9 @@ function App() {
   const handlePlayAgain = async () => {
     setFinalResult(null);
     setView('member-radar');
-    huntStartTime.current = session?.startTime && session.startTime < Date.now() + 60000
+    updateHuntStartTime(session?.startTime && session.startTime < Date.now() + 60000
       ? session.startTime
-      : Date.now();
+      : Date.now());
     totalDistance.current = 0;
     lastPosition.current = null;
     setFoundCheckpoints([]);
@@ -824,27 +819,28 @@ function App() {
 
   // Broadcast channel for same-device/tab sync (testing)
   const bcRef = useRef<BroadcastChannel | null>(null);
-  useEffect(() => {
-    try {
-      bcRef.current = new BroadcastChannel('radar-hunt-sync');
-      bcRef.current.onmessage = (e) => {
-        const msg = e.data;
-        if (msg?.type === 'start' && activeMap && session && msg.code === session.code) {
-          // Received start signal from leader tab
-          if (msg.mapChecksum === mapChecksum(activeMap) && msg.startTime > Date.now() - 5000) {
-            const newSession: GameSession = { ...session, startTime: msg.startTime, status: 'starting' };
-            saveActiveSession(newSession).then(() => {
-              setSession(newSession);
-              if (view === 'member-waiting' || view === 'member-radar') {
-                startCountdown(msg.startTime, activeMap, newSession);
-              }
-            });
-          }
+  const onSessionSignal = useEffectEvent((e: MessageEvent) => {
+    const msg = e.data;
+    if (msg?.type !== 'start' || !activeMap || !session || msg.code !== session.code) return;
+    if (msg.mapChecksum === mapChecksum(activeMap) && msg.startTime > Date.now() - 5000) {
+      const newSession: GameSession = { ...session, startTime: msg.startTime, status: 'starting' };
+      saveActiveSession(newSession).then(() => {
+        setSession(newSession);
+        if (view === 'member-waiting' || view === 'member-radar') {
+          startCountdown(msg.startTime, activeMap, newSession);
         }
-      };
-    } catch { /* BroadcastChannel not supported */ }
-    return () => { bcRef.current?.close(); };
-  }, [activeMap, session, view]);
+      });
+    }
+  });
+  useEffect(() => {
+    let channel: BroadcastChannel;
+    try {
+      channel = new BroadcastChannel('radar-hunt-sync');
+    } catch { /* BroadcastChannel not supported */ return; }
+    bcRef.current = channel;
+    channel.onmessage = (event) => onSessionSignal(event);
+    return () => { channel.close(); bcRef.current = null; };
+  }, []);
 
   // Trigger synchronized start
   const handleStartGame = async (delaySec = 5) => {
@@ -874,9 +870,38 @@ function App() {
 
   // Update settings
   const handleSaveSettings = async (newSettings: typeof settings) => {
-    setSettings(newSettings);
     await saveSettings(newSettings);
+    setSettings(newSettings);
   };
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([loadRole(), loadActiveMap(), loadSettings(), loadActiveSession()]).then((saved) => {
+      if (active) return initApp(...saved);
+    }).catch((error: unknown) => {
+      if (!active) return;
+      console.error('Could not load Radar Hunt', error instanceof Error ? error.name : 'Unknown error');
+      setLoadFailed(true);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+      watchId.current = null;
+      if (mockInterval.current !== null) clearInterval(mockInterval.current);
+      mockInterval.current = null;
+    };
+  }, []);
+
+  if (loadFailed) {
+    return (
+      <main className="min-h-screen bg-slate-950 p-6 flex flex-col items-center justify-center gap-2 text-center">
+        <h1 className="font-bold">未能載入本機資料</h1>
+        <p className="max-w-md text-slate-300">請檢查瀏覽器嘅網站儲存設定，再重新整理。請勿清除網站資料，以免遺失紀錄。</p>
+      </main>
+    );
+  }
 
   if (loading) {
     return (
@@ -886,20 +911,8 @@ function App() {
     );
   }
 
-  return (
+  const screen = (
     <>
-      {role === 'member' && (
-        <GPSPermissionModal
-          isOpen={showGPSModal}
-          status={gpsPermission}
-          onRequestPermission={requestGPSPermission}
-          onContinueAnyway={() => setShowGPSModal(false)}
-          onMockDemo={() => startMockHunt(createDemoMap())}
-        />
-      )}
-
-      {countdown !== null && <CountdownOverlay count={countdown} />}
-
       {view === 'help' ? (
         <HelpScreen
           onBack={() => {
@@ -980,7 +993,7 @@ function App() {
                 handleJoinSession(pendingJoin, map);
               } else {
                 setView('member-radar');
-                huntStartTime.current = Date.now();
+                updateHuntStartTime(Date.now());
                 totalDistance.current = 0;
                 loadFoundCheckpoints(map.id).then(setFoundCheckpoints);
                 if (gpsPermission !== 'granted') setShowGPSModal(true);
@@ -1016,7 +1029,7 @@ function App() {
             onChangeView={setView}
             gpsEnabled={gpsPermission === 'granted'}
             session={session}
-            startTime={huntStartTime.current}
+            startTime={huntStartForView}
             onClearProgress={handleClearProgress}
             onFinishHunt={() => completeHunt(foundCheckpoints)}
           />
@@ -1032,7 +1045,7 @@ function App() {
         ) : view === 'treasure-log' && activeMap ? (
           <TreasureLogScreen
             map={activeMap}
-            startTime={huntStartTime.current}
+            startTime={huntStartForView}
             onBack={() => setView('member-radar')}
           />
         ) : view === 'history' ? (
@@ -1058,7 +1071,7 @@ function App() {
                 handleJoinSession(pendingJoin, map);
               } else {
                 setView('member-radar');
-                huntStartTime.current = Date.now();
+                updateHuntStartTime(Date.now());
                 totalDistance.current = 0;
                 loadFoundCheckpoints(map.id).then(setFoundCheckpoints);
               }
@@ -1066,8 +1079,26 @@ function App() {
           />
         )
       )}
-      <Analytics />
     </>
+  );
+
+  return (
+    <div className="app-frame">
+      <StoreSupportTop language={settings.language} />
+      {role === 'member' && (
+        <GPSPermissionModal
+          isOpen={showGPSModal}
+          status={gpsPermission}
+          onRequestPermission={requestGPSPermission}
+          onContinueAnyway={() => setShowGPSModal(false)}
+          onMockDemo={() => startMockHunt(createDemoMap())}
+        />
+      )}
+
+      {countdown !== null && <CountdownOverlay count={countdown} />}
+      <main className="app-view">{screen}</main>
+      <Analytics />
+    </div>
   );
 }
 

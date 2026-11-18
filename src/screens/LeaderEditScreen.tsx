@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowLeft, Plus, MapPin, Trash2, Navigation, 
+  ArrowLeft, Plus, Trash2, Navigation,
   Type, Image as ImageIcon, Smile, Link, Target,
-  X, Search, ChevronUp, ChevronDown
+  X, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { GameMap, Checkpoint, CHECKPOINT_TYPES, CheckpointType, EMOJI_LIST, GAME_MODE_LABELS } from '../lib/types';
 import { saveMaps, loadMaps } from '../lib/storage';
@@ -45,7 +45,7 @@ export default function LeaderEditScreen({ map, onBack, onMapUpdated }: Props) {
           setCpLng(data.lng.toFixed(6));
           if (!showForm) setShowForm(true);
         }
-      } catch {}
+      } catch { /* Ignore messages not sent by the map. */ }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);

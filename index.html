@@ -1,7 +1,21 @@
 <!doctype html>
-<html lang="zh-TW">
+<!-- Radar Hunt v2.6.0 · © SCOUT SYSTEM. Source: entry/radar-hunt_v2.6.0.html; index.html is the stable Vite entry copy. -->
+<html lang="zh-Hant-HK">
   <head>
     <meta charset="UTF-8" />
+    <script src="/store_gate_v1.0.js"></script>
+    <script>
+      if (typeof initStoreGate === 'function' && initStoreGate({
+        appKey: 'skw-radar-hunt2',
+        mode: 'entry-gate',
+        portalIds: ['appstore'],
+        silentPortalIds: ['library'],
+        allowStandalone: true,
+        autoRedirectSeconds: 0
+      }).allowed) {
+        document.documentElement.dataset.storeAdmitted = 'true';
+      }
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#0A0E1A" />
@@ -12,10 +26,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <title>Radar Hunt - GPS 尋寶雷達</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <meta name="app-version" content="v2.6.0" />
+    <title>Radar Hunt v2.6.0 — GPS 尋寶雷達</title>
     <script data-arena-recording="true">(function(){
 "use strict";
+if(document.documentElement.dataset.storeAdmitted!=="true")return;
 var SK="__arena_rec",RRWEB_CDN="https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.4/dist/rrweb.min.js";
 var MAX_RECORDING_MS=600000,MAX_RRWEB_EVENTS=30000,MAX_INTERACTIONS=5000,MAX_CURSOR_POINTS=10000,recStopped=false;
 var stored=null;try{var raw=sessionStorage.getItem(SK);if(raw)stored=JSON.parse(raw);}catch(ex){}
@@ -36,9 +51,10 @@ function loadRrweb(){if(rrwebStarted)return;rrwebStarted=true;var s=document.cre
 window.addEventListener("message",function(e){if(!e.data||typeof e.data.type!=="string")return;if(e.data.type==="arena:init"){if(!meta)startTime=Date.now();meta={generationId:e.data.generationId||e.data.modelId,tournamentId:e.data.tournamentId};persist();loadRrweb();if(e.source)e.source.postMessage({type:"arena:init-ack",generationId:meta.generationId},"*");}if(e.data.type==="arena:flush"){var resp={type:"arena:recording-data",generationId:meta?meta.generationId:null,rrwebEvents:rrwebEvents,analytics:buildAnalytics()};try{sessionStorage.removeItem(SK);}catch(ex){}if(e.source)e.source.postMessage(resp,"*");}});
 loadRrweb();
 })();</script>
-  <script data-arena-views="true">(function(){var isTop=false;try{isTop=window.self===window.top;}catch(e){}if(!isTop)return;window.__ARENA_META={generationId:"kimi-k2.5",tournamentId:"5f1a7a79-84c2-41bd-a588-a32121d06b9e"};var payload={tournamentId:"5f1a7a79-84c2-41bd-a588-a32121d06b9e",modelId:"kimi-k2.5"};try{var r=document.referrer;if(r){var u=new URL(r);payload.referrerDomain=u.hostname;}}catch(e){}try{var vid=null;try{vid=localStorage.getItem('arena_vid');}catch(e){}if(!vid){vid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2)).slice(0,32);try{localStorage.setItem('arena_vid',vid);}catch(e){}}if(vid)payload.viewerId=vid;}catch(e){}try{fetch("https://www.designarena.ai/api/agon/page-views",{"method":"POST","headers":{"Content-Type":"application/json"},"body":JSON.stringify(payload),"keepalive":true});}catch(e){}})();</script>
+  <script data-arena-views="true">(function(){if(document.documentElement.dataset.storeAdmitted!=="true")return;var isTop=false;try{isTop=window.self===window.top;}catch(e){}if(!isTop)return;window.__ARENA_META={generationId:"kimi-k2.5",tournamentId:"5f1a7a79-84c2-41bd-a588-a32121d06b9e"};var payload={tournamentId:"5f1a7a79-84c2-41bd-a588-a32121d06b9e",modelId:"kimi-k2.5"};try{var r=document.referrer;if(r){var u=new URL(r);payload.referrerDomain=u.hostname;}}catch(e){}try{var vid=null;try{vid=localStorage.getItem('arena_vid');}catch(e){}if(!vid){vid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2)).slice(0,32);try{localStorage.setItem('arena_vid',vid);}catch(e){}}if(vid)payload.viewerId=vid;}catch(e){}try{fetch("https://www.designarena.ai/api/agon/page-views",{"method":"POST","headers":{"Content-Type":"application/json"},"body":JSON.stringify(payload),"keepalive":true});}catch(e){}})();</script>
 </head>
   <body>
+    <noscript>請啟用 JavaScript，再由 SCOUT APP STORE 開啟 Radar Hunt。</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

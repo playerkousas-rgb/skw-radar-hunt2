@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Colors } from '../lib/colors';
 import { formatDistance } from '../lib/utils';

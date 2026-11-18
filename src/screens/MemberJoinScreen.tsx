@@ -22,9 +22,12 @@ interface Props {
 
 export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, onAutoStart, initialCode, initialMap, initialPlayerName }: Props) {
   const [roomCode, setRoomCode] = useState(initialCode || '');
-  const [importCode, setImportCode] = useState('');
+  const [urlImportData] = useState(() => new URLSearchParams(window.location.search).get('import'));
+  const [importCode, setImportCode] = useState(urlImportData || '');
   const [error, setError] = useState('');
-  const [activeMap, setActiveMap] = useState<GameMap | null>(initialMap || null);
+  const [activeMap, setActiveMap] = useState(() =>
+    (urlImportData ? decodeMapFromExport(urlImportData) : null) ?? initialMap ?? null
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Personal auto-start mode state (link carried &auto=N)
@@ -35,19 +38,9 @@ export default function MemberJoinScreen({ onBack, onJoinSession, onOpenImport, 
   const [autoCancelled, setAutoCancelled] = useState(false);
   const [playerName, setPlayerName] = useState(initialPlayerName || '');
 
-  // Check URL for import data
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const importData = params.get('import');
-    if (importData) {
-      setImportCode(importData);
-      const map = decodeMapFromExport(importData);
-      if (map) {
-        setActiveMap(map);
-      }
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
+    if (urlImportData) window.history.replaceState({}, '', window.location.pathname);
+  }, [urlImportData]);
 
   // Arm the countdown at mount when the link provided map + room code
   // (both come from App and are available on first render)

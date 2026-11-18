@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { APP_VERSION } from '../lib/version';
 
 interface Props {
   className?: string;
@@ -17,7 +18,7 @@ export default function CopyrightFooter({ className = '', children }: Props) {
         COPYRIGHT © 2026 SCOUT SYSTEM
       </p>
       <p className="text-[9px] text-slate-700 mt-0.5 select-none">
-        ALL RIGHTS RESERVED
+        ALL RIGHTS RESERVED · <strong className="text-slate-400">{APP_VERSION}</strong>
       </p>
     </div>
   );

@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { MapPin, CheckCircle2, Lock, Navigation } from 'lucide-react';
-import { Colors } from '../lib/colors';
 import { Checkpoint } from '../lib/types';
 import { formatDistance } from '../lib/utils';
 

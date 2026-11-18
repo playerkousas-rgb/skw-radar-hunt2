@@ -1,55 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Volume2, Vibrate, Map, Wifi, Palette, Globe, User, Save } from 'lucide-react';
 import { ViewType, UserSettings } from '../lib/types';
-import { loadSettings, saveSettings } from '../lib/storage';
 import GlowButton from '../components/GlowButton';
 import CopyrightFooter from '../components/CopyrightFooter';
 
 interface Props {
   onBack: () => void;
   onChangeView: (view: ViewType) => void;
-  onSaveSettings?: (settings: UserSettings) => void;
-  currentSettings?: UserSettings;
+  onSaveSettings: (settings: UserSettings) => Promise<void>;
+  currentSettings: UserSettings;
 }
 
 export default function SettingsScreen({ onBack, onSaveSettings, currentSettings }: Props) {
-  const [settings, setSettings] = useState<UserSettings | null>(currentSettings || null);
+  const [settings, setSettings] = useState(currentSettings);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (currentSettings) {
-      setSettings(currentSettings);
-    } else {
-      loadSettingsData();
-    }
-  }, [currentSettings]);
-
-  const loadSettingsData = async () => {
-    const data = await loadSettings();
-    setSettings(data);
-  };
-
   const updateSetting = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
-    if (!settings) return;
-    setSettings({ ...settings, [key]: value });
+    setSettings((previous) => ({ ...previous, [key]: value }));
   };
 
   const handleSave = async () => {
-    if (!settings) return;
-    await saveSettings(settings);
-    onSaveSettings?.(settings);
+    await onSaveSettings(settings);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
-
-  if (!settings) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
-      </div>
-    );
-  }
 
   const settingGroups = [
     {
@@ -239,7 +214,7 @@ export default function SettingsScreen({ onBack, onSaveSettings, currentSettings
           className="pt-6 border-t border-slate-800 text-center"
         >
           <div className="flex items-center justify-center gap-2 text-slate-500">
-            <span className="text-sm">Radar Hunt v2.0</span>
+            <span className="text-sm">Radar Hunt</span>
           </div>
           <p className="text-xs text-slate-600 mt-1">
             GPS 尋寶雷達

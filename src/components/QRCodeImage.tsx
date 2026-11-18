@@ -15,27 +15,26 @@ interface Props {
  * 使用 `qrcode` 套件直接在裝置上把文字轉成 data URL，離線也能顯示。
  */
 export default function QRCodeImage({ value, size = 240, framed = true, className }: Props) {
-  const [dataUrl, setDataUrl] = useState('');
-  const [error, setError] = useState(false);
+  const [output, setOutput] = useState<{ value: string; size: number; url: string | null }>();
+  const current = output?.value === value && output.size === size ? output : undefined;
 
   useEffect(() => {
+    if (!value) return;
     let active = true;
-    setError(false);
-    if (!value) { setDataUrl(''); return; }
     QRCode.toDataURL(value, {
       width: size,
       margin: 1,
       errorCorrectionLevel: 'M',
       color: { dark: '#000000', light: '#FFFFFF' },
     }).then((url) => {
-      if (active) setDataUrl(url);
+      if (active) setOutput({ value, size, url });
     }).catch(() => {
-      if (active) setError(true);
+      if (active) setOutput({ value, size, url: null });
     });
     return () => { active = false; };
   }, [value, size]);
 
-  if (error) {
+  if (current?.url === null) {
     return (
       <div className={`bg-slate-800 rounded-xl flex flex-col items-center justify-center ${className}`}
         style={{ width: size, height: size }}>
@@ -45,6 +44,7 @@ export default function QRCodeImage({ value, size = 240, framed = true, classNam
     );
   }
 
+  const dataUrl = current?.url;
   if (!dataUrl) {
     return (
       <div className={`bg-slate-800 rounded-xl flex items-center justify-center ${className}`}

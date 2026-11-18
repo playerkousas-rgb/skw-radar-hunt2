@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Trash2, Edit3, Share2, MapPin, Users,
-  ArrowLeft, ChevronRight, Play, Trophy, Map, HelpCircle
+  Plus, Trash2, Edit3, Share2, MapPin,
+  ArrowLeft, Play, Trophy, HelpCircle
 } from 'lucide-react';
 import { GameMap, DIFFICULTY_LABELS, DifficultyLevel, GAME_MODE_LABELS, GameModeType, TIMING_MODE_LABELS, TimingModeType } from '../lib/types';
 import { generateId } from '../lib/utils';
@@ -36,23 +36,18 @@ export default function LeaderHomeScreen({ onBack, onEditMap, onExportMap, onSta
   const [stats, setStats] = useState({ totalMapsCreated: 0, totalCheckpoints: 0 });
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    const [loadedMaps, userStats, settings] = await Promise.all([
-      loadMaps(),
-      loadUserStats(),
-      loadSettings(),
-    ]);
-    setMaps(loadedMaps);
-    setCreatorName(settings.playerName || '領袖');
-    const totalCPs = loadedMaps.reduce((sum: number, m: GameMap) => sum + m.checkpoints.length, 0);
-    setStats({
-      totalMapsCreated: userStats.totalMapsCreated || 0,
-      totalCheckpoints: totalCPs,
+    let active = true;
+    Promise.all([loadMaps(), loadUserStats(), loadSettings()]).then(([loadedMaps, userStats, settings]) => {
+      if (!active) return;
+      setMaps(loadedMaps);
+      setCreatorName(settings.playerName || '領袖');
+      setStats({
+        totalMapsCreated: userStats.totalMapsCreated || 0,
+        totalCheckpoints: loadedMaps.reduce((sum, map) => sum + map.checkpoints.length, 0),
+      });
     });
-  };
+    return () => { active = false; };
+  }, []);
 
   const createMap = async () => {
     if (!newMapName.trim()) return;
